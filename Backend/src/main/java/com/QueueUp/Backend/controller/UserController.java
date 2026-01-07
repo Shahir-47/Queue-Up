@@ -18,11 +18,16 @@ public class UserController {
     }
 
     @PutMapping("/update")
-    public ResponseEntity<?> updateProfile(@RequestBody Map<String, Object> updateData) {
+    public ResponseEntity<?> updateProfile(@RequestBody Map<String, Object> updateData,
+                                           jakarta.servlet.http.HttpServletRequest request) { // <--- Add request param
         try {
-            // TODO: Retrieve real User ID from SecurityContext (JWT) later
-            // For now, we simulate a logged-in user with ID 1
-            Long currentUserId = 1L;
+            // RETRIEVE REAL ID FROM MIDDLEWARE
+            Long currentUserId = (Long) request.getAttribute("userId");
+
+            // Safety check
+            if (currentUserId == null) {
+                return ResponseEntity.status(401).body(Map.of("success", false, "message", "User ID missing"));
+            }
 
             User updatedUser = userService.updateProfile(currentUserId, updateData);
 
@@ -33,7 +38,6 @@ public class UserController {
 
         } catch (Exception e) {
             e.printStackTrace();
-            // FIX: Changed .json() to .body()
             return ResponseEntity.status(500).body(Map.of(
                     "success", false,
                     "message", e.getMessage()
