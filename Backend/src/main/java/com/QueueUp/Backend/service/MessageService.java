@@ -4,10 +4,9 @@ import com.QueueUp.Backend.dto.SendMessageDto;
 import com.QueueUp.Backend.model.*;
 import com.QueueUp.Backend.repository.MessageRepository;
 import com.QueueUp.Backend.repository.UserRepository;
-import com.QueueUp.Backend.socket.SocketService; // <--- NEW IMPORT
+import com.QueueUp.Backend.socket.SocketService;
 import com.cloudinary.Cloudinary;
 import com.cloudinary.utils.ObjectUtils;
-import com.fasterxml.jackson.databind.ObjectMapper; // <--- NEW IMPORT
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,19 +22,15 @@ public class MessageService {
     private final UserRepository userRepository;
     private final Cloudinary cloudinary;
     private final SocketService socketService;
-    private final ObjectMapper objectMapper;
 
-    // Updated Constructor with new dependencies
     public MessageService(MessageRepository messageRepository,
                           UserRepository userRepository,
                           Cloudinary cloudinary,
-                          SocketService socketService,
-                          ObjectMapper objectMapper) {
+                          SocketService socketService) {
         this.messageRepository = messageRepository;
         this.userRepository = userRepository;
         this.cloudinary = cloudinary;
         this.socketService = socketService;
-        this.objectMapper = objectMapper;
     }
 
     @Transactional
@@ -71,7 +66,8 @@ public class MessageService {
                 else if (attInput.getData() != null && attInput.getData().startsWith("data:")) {
                     // Cloudinary Upload
                     try {
-                        Map uploadRes = cloudinary.uploader().upload(attInput.getData(), ObjectUtils.asMap(
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> uploadRes = cloudinary.uploader().upload(attInput.getData(), ObjectUtils.asMap(
                                 "folder", "chat_attachments",
                                 "resource_type", "auto"
                         ));
@@ -91,18 +87,16 @@ public class MessageService {
         // Save to DB
         Message savedMessage = messageRepository.save(message);
 
-// PREPARE SOCKET PAYLOAD (Manual Map Construction to match Node behavior exactly)
+        // PREPARE SOCKET PAYLOAD
         Map<String, Object> socketPayload = new HashMap<>();
-        socketPayload.put("_id", savedMessage.getId()); // Use _id
+        socketPayload.put("_id", savedMessage.getId());
         socketPayload.put("content", savedMessage.getContent());
-        socketPayload.put("senderId", sender.getId()); // Flat ID
+        socketPayload.put("senderId", sender.getId());
         socketPayload.put("receiverId", receiver.getId());
         socketPayload.put("createdAt", savedMessage.getCreatedAt().toString());
-
-// Attachments need to respect the Lowercase Enum fix
         socketPayload.put("attachments", savedMessage.getAttachments());
 
-// Send
+        // Send
         socketService.sendMessageToUser(receiver.getId(), "newMessage", socketPayload);
 
         return savedMessage;

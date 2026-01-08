@@ -19,9 +19,13 @@ import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.Map;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 @Service
 public class AuthService {
 
+    private static final Logger logger = LoggerFactory.getLogger(AuthService.class);
     private final UserRepository userRepository;
     private final ArtistRepository artistRepository;
     private final TrackRepository trackRepository;
@@ -52,6 +56,8 @@ public class AuthService {
         Integer age = parseIntSafely(data.get("age"));
 
         String image = (String) data.get("image");
+
+        @SuppressWarnings("unchecked")
         Map<String, Object> spotifyTokens = (Map<String, Object>) data.get("spotify");
 
         // 1. Validation
@@ -74,7 +80,8 @@ public class AuthService {
         // 3. Cloudinary Upload
         if (image != null && image.startsWith("data:image")) {
             try {
-                Map uploadResult = cloudinary.uploader().upload(image, ObjectUtils.emptyMap());
+                @SuppressWarnings("unchecked")
+                Map<String, Object> uploadResult = cloudinary.uploader().upload(image, ObjectUtils.emptyMap());
                 user.setImage((String) uploadResult.get("secure_url"));
             } catch (IOException e) {
                 throw new RuntimeException("Failed to upload profile picture");
@@ -95,21 +102,20 @@ public class AuthService {
         // 5. Save User
         User savedUser = userRepository.save(user);
 
-        // 6. Fetch Spotify Data (Top, Saved, Followed)
+        // 6. Fetch Spotify Data
         if (savedUser.getSpotifyAccessToken() != null) {
             try {
                 fetchAndSaveSpotifyData(savedUser);
             } catch (Exception e) {
-                e.printStackTrace();
-                System.err.println("Warning: Failed to fetch initial Spotify data");
+                logger.error("Failed to fetch Spotify data for user {}", savedUser.getId(), e);
             }
         }
 
-        // 7. Create Demo Users (Populate Matches)
+        // 7. Create Demo Users
         try {
             createDemoUsers(savedUser);
         } catch (Exception e) {
-            System.err.println("Warning: Failed to create demo users: " + e.getMessage());
+            logger.warn("Failed to create demo users", e);
         }
 
         // 8. Broadcast
@@ -129,7 +135,7 @@ public class AuthService {
         return user;
     }
 
-    // --- HELPER METHODS ---
+    // HELPER METHODS
 
     /**
      * Creates 5 fake users who share the same music taste as the signed-up user.
@@ -180,20 +186,29 @@ public class AuthService {
             // Save to DB
             userRepository.save(demo);
         }
-        System.out.println("✅ Created 5 demo users matching " + sourceUser.getName());
     }
 
     private Integer parseIntSafely(Object obj) {
-        if (obj == null) return null;
-        if (obj instanceof Integer) return (Integer) obj;
-        if (obj instanceof String) {
-            try {
-                return Integer.parseInt((String) obj);
-            } catch (NumberFormatException e) {
+        switch (obj) {
+            case null -> {
                 return null;
             }
+            case Integer i -> {
+                return i;
+            }
+            case String s -> {
+                try {
+                    return Integer.parseInt(s);
+                } catch (NumberFormatException e) {
+                    return null;
+                }
+            }
+            case Number number -> {
+                return number.intValue();
+            }
+            default -> {
+            }
         }
-        if (obj instanceof Number) return ((Number) obj).intValue();
         return null;
     }
 
@@ -224,18 +239,6 @@ public class AuthService {
             for (var item : followed.getItems()) {
                 user.getFollowedArtists().add(saveOrGetArtist(item));
             }
-
-            System.out.println("--- SPRING BOOT SPOTIFY FETCH ---");
-
-            System.out.print("Top Artists: ");
-            user.getTopArtists().forEach(a -> System.out.print(a.getName() + " (" + a.getSpotifyId() + "), "));
-            System.out.println();
-
-            System.out.print("Top Tracks: ");
-            user.getTopTracks().forEach(t -> System.out.print(t.getName() + " (" + t.getSpotifyId() + "), "));
-            System.out.println();
-
-            System.out.println("---------------------------------");
 
             userRepository.save(user);
 

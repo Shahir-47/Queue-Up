@@ -7,14 +7,19 @@ import com.QueueUp.Backend.model.User;
 import com.QueueUp.Backend.repository.UserRepository;
 import com.QueueUp.Backend.socket.SocketService;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
 public class MatchService {
+
+    private static final Logger logger = LoggerFactory.getLogger(MatchService.class);
 
     private final UserRepository userRepository;
     private final SocketService socketService;
@@ -27,9 +32,8 @@ public class MatchService {
     }
 
     // SWIPE LOGIC
-
     @Transactional
-    public User swipeRight(Long currentUserId, Long likedUserId) {
+    public void swipeRight(Long currentUserId, Long likedUserId) {
         User currentUser = userRepository.findById(currentUserId).orElseThrow();
         User likedUser = userRepository.findById(likedUserId).orElseThrow();
 
@@ -43,40 +47,47 @@ public class MatchService {
             likedUser.getMatches().add(currentUser);
             userRepository.save(currentUser);
             userRepository.save(likedUser);
+
             notifyMatch(currentUser, likedUser);
         }
-        return currentUser;
     }
 
     private void notifyMatch(User user1, User user2) {
         try {
-            Map<String, Object> p1 = new HashMap<>();
-            p1.put("_id", user2.getId()); p1.put("name", user2.getName()); p1.put("image", user2.getImage());
-            socketService.sendMessageToUser(user1.getId(), "newMatch", objectMapper.writeValueAsString(p1));
+            sendMatchNotification(user1, user2);
+            sendMatchNotification(user2, user1);
+        } catch (Exception e) {
+            logger.error("Failed to send match notification via socket", e);
+        }
+    }
 
-            Map<String, Object> p2 = new HashMap<>();
-            p2.put("_id", user1.getId()); p2.put("name", user1.getName()); p2.put("image", user1.getImage());
-            socketService.sendMessageToUser(user2.getId(), "newMatch", objectMapper.writeValueAsString(p2));
-        } catch (Exception e) {}
+    private void sendMatchNotification(User recipient, User matchData) throws Exception {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("_id", matchData.getId());
+        payload.put("name", matchData.getName());
+        payload.put("image", matchData.getImage());
+
+        socketService.sendMessageToUser(
+                recipient.getId(),
+                "newMatch",
+                objectMapper.writeValueAsString(payload)
+        );
     }
 
     @Transactional
-    public User swipeLeft(Long currentUserId, Long dislikedUserId) {
+    public void swipeLeft(Long currentUserId, Long dislikedUserId) {
         User currentUser = userRepository.findById(currentUserId).orElseThrow();
         User dislikedUser = userRepository.findById(dislikedUserId).orElseThrow();
         if (!currentUser.getDislikes().contains(dislikedUser)) {
             currentUser.getDislikes().add(dislikedUser);
             userRepository.save(currentUser);
         }
-        return currentUser;
     }
 
-    // --- SCORING & FETCHING ---
-
+    // SCORING AND FETCHING
     public List<MatchProfileDto> getUserProfiles(Long currentUserId) {
         User currentUser = userRepository.findById(currentUserId).orElseThrow();
 
-        // Exclude people already interacted with
         List<Long> excludeIds = new ArrayList<>();
         excludeIds.add(currentUserId);
         excludeIds.addAll(currentUser.getLikes().stream().map(User::getId).toList());
@@ -85,7 +96,6 @@ public class MatchService {
 
         List<User> candidates = userRepository.findByIdNotIn(excludeIds);
 
-        // Calculate Scores
         return candidates.stream()
                 .map(candidate -> calculateScore(currentUser, candidate))
                 .sorted((a, b) -> b.getScore() - a.getScore())
@@ -101,16 +111,15 @@ public class MatchService {
     }
 
     private MatchProfileDto calculateScore(User me, User other) {
-
-        List<Artist> commonArtists = findCommonArtists(me.getTopArtists(), other.getTopArtists());
-        List<Track> commonTracks = findCommonTracks(me.getTopTracks(), other.getTopTracks());
-        List<Track> commonSaved = findCommonTracks(me.getSavedTracks(), other.getSavedTracks());
-        List<Artist> commonFollowed = findCommonArtists(me.getFollowedArtists(), other.getFollowedArtists());
+        List<Artist> commonArtists = findCommonItems(me.getTopArtists(), other.getTopArtists(), Artist::getSpotifyId);
+        List<Track> commonTracks = findCommonItems(me.getTopTracks(), other.getTopTracks(), Track::getSpotifyId);
+        List<Track> commonSaved = findCommonItems(me.getSavedTracks(), other.getSavedTracks(), Track::getSpotifyId);
+        List<Artist> commonFollowed = findCommonItems(me.getFollowedArtists(), other.getFollowedArtists(), Artist::getSpotifyId);
 
         int score = (commonArtists.size() * 3) +
                 (commonTracks.size() * 2) +
-                (commonSaved.size() * 1) +
-                (commonFollowed.size() * 1);
+                (commonSaved.size()) +
+                (commonFollowed.size());
 
         MatchProfileDto dto = new MatchProfileDto();
         dto.setId(other.getId());
@@ -120,38 +129,34 @@ public class MatchService {
         dto.setBio(other.getBio());
         dto.setScore(score);
 
-        // Convert to DTOs for Frontend
-        dto.setCommonArtists(toArtistDto(commonArtists));
-        dto.setCommonTracks(toTrackDto(commonTracks));
-        dto.setCommonSaved(toTrackDto(commonSaved));
-        dto.setCommonFollowed(toArtistDto(commonFollowed));
+        dto.setCommonArtists(toDtoList(commonArtists, Artist::getSpotifyId, Artist::getName, Artist::getImageUrl));
+        dto.setCommonTracks(toDtoList(commonTracks, Track::getSpotifyId, Track::getName, Track::getImageUrl));
+        dto.setCommonSaved(toDtoList(commonSaved, Track::getSpotifyId, Track::getName, Track::getImageUrl));
+        dto.setCommonFollowed(toDtoList(commonFollowed, Artist::getSpotifyId, Artist::getName, Artist::getImageUrl));
 
         return dto;
     }
 
-    // Helpers for Safe Intersection
-
-    private List<Artist> findCommonArtists(Set<Artist> set1, Set<Artist> set2) {
+    // HELPERS
+    // Generic method to find common items between two sets based on a unique ID.
+    private <T> List<T> findCommonItems(Set<T> set1, Set<T> set2, Function<T, String> idExtractor) {
         if (set1 == null || set2 == null) return new ArrayList<>();
-        Set<String> ids1 = set1.stream().map(Artist::getSpotifyId).collect(Collectors.toSet());
-        return set2.stream().filter(a -> ids1.contains(a.getSpotifyId())).collect(Collectors.toList());
-    }
-
-    private List<Track> findCommonTracks(Set<Track> set1, Set<Track> set2) {
-        if (set1 == null || set2 == null) return new ArrayList<>();
-        Set<String> ids1 = set1.stream().map(Track::getSpotifyId).collect(Collectors.toSet());
-        return set2.stream().filter(t -> ids1.contains(t.getSpotifyId())).collect(Collectors.toList());
-    }
-
-    private List<MatchProfileDto.ItemDto> toArtistDto(List<Artist> artists) {
-        return artists.stream()
-                .map(a -> new MatchProfileDto.ItemDto(a.getSpotifyId(), a.getName(), a.getImageUrl()))
+        Set<String> ids1 = set1.stream().map(idExtractor).collect(Collectors.toSet());
+        return set2.stream()
+                .filter(item -> ids1.contains(idExtractor.apply(item)))
                 .collect(Collectors.toList());
     }
 
-    private List<MatchProfileDto.ItemDto> toTrackDto(List<Track> tracks) {
-        return tracks.stream()
-                .map(t -> new MatchProfileDto.ItemDto(t.getSpotifyId(), t.getName(), t.getImageUrl()))
+     // Generic method to convert any list of music items into frontend DTOs.
+    private <T> List<MatchProfileDto.ItemDto> toDtoList(List<T> items,
+                                                        Function<T, String> idMapper,
+                                                        Function<T, String> nameMapper,
+                                                        Function<T, String> imageMapper) {
+        return items.stream()
+                .map(item -> new MatchProfileDto.ItemDto(
+                        idMapper.apply(item),
+                        nameMapper.apply(item),
+                        imageMapper.apply(item)))
                 .collect(Collectors.toList());
     }
 }

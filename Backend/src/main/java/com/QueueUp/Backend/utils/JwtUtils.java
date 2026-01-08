@@ -15,15 +15,15 @@ import java.util.Date;
 public class JwtUtils {
 
     @Value("${jwt.secret}")
-    private String jwtSecret; // We need to add this to application.yml later!
-
-    private final long EXPIRATION_TIME = 7 * 24 * 60 * 60 * 1000L; // 7 days
+    private String jwtSecret;
 
     private SecretKey getSigningKey() {
         return Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));
     }
 
     public String generateToken(Long userId) {
+        long EXPIRATION_TIME = 7 * 24 * 60 * 60 * 1000L; // 7 days
+        
         return Jwts.builder()
                 .setSubject(String.valueOf(userId))
                 .setIssuedAt(new Date())

@@ -11,6 +11,9 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 @RestController
 @RequestMapping("/api/auth/spotify")
 public class SpotifyAuthController {
@@ -18,6 +21,7 @@ public class SpotifyAuthController {
     private final SpotifyService spotifyService;
     private final ObjectMapper objectMapper;
     private final Set<String> pendingStates = ConcurrentHashMap.newKeySet();
+    private static final Logger logger = LoggerFactory.getLogger(SpotifyAuthController.class);
 
     public SpotifyAuthController(SpotifyService spotifyService, ObjectMapper objectMapper) {
         this.spotifyService = spotifyService;
@@ -64,8 +68,8 @@ public class SpotifyAuthController {
             """.formatted(payloadJson);
 
         } catch (Exception e) {
-            e.printStackTrace();
-            return generateErrorHtml("Auth failed: " + e.getMessage());
+            logger.error("Spotify callback failed", e);
+            return generateErrorHtml("Authentication failed. Please try again.");
         }
     }
 

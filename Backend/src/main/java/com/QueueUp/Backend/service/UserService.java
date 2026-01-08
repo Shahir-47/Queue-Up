@@ -32,7 +32,8 @@ public class UserService {
             // Check if it's a base64 string
             if (imageBase64 != null && imageBase64.startsWith("data:image")) {
                 try {
-                    Map uploadResult = cloudinary.uploader().upload(imageBase64, ObjectUtils.emptyMap());
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> uploadResult = cloudinary.uploader().upload(imageBase64, ObjectUtils.emptyMap());
 
                     String secureUrl = (String) uploadResult.get("secure_url");
                     user.setImage(secureUrl);

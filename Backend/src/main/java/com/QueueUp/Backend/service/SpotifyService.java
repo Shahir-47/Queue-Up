@@ -1,5 +1,7 @@
 package com.QueueUp.Backend.service;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
@@ -14,6 +16,8 @@ import java.util.Map;
 
 @Service
 public class SpotifyService {
+
+    private static final Logger logger = LoggerFactory.getLogger(SpotifyService.class);
 
     @Value("${spotify.client-id}")
     private String clientId;
@@ -63,12 +67,14 @@ public class SpotifyService {
         HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(body, headers);
 
         try {
-            // Send POST and get JSON response as a Map
-            ResponseEntity<Map> response = restTemplate.postForEntity(url, request, Map.class);
-            return response.getBody();
+            @SuppressWarnings("unchecked")
+            Map<String, Object> responseBody = (Map<String, Object>) restTemplate.postForEntity(url, request, Map.class).getBody();
+
+            return responseBody;
+
         } catch (Exception e) {
-            e.printStackTrace();
-            throw new RuntimeException("Failed to exchange token: " + e.getMessage());
+            logger.error("Failed to exchange Spotify token for code: {}", code, e);
+            throw new RuntimeException("Failed to exchange token", e);
         }
     }
 }

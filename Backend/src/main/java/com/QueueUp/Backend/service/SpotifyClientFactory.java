@@ -10,7 +10,6 @@ import se.michaelthelin.spotify.model_objects.credentials.AuthorizationCodeCrede
 
 import java.net.URI;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
 
 @Service
 public class SpotifyClientFactory {

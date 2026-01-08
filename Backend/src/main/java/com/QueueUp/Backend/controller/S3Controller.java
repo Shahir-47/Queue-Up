@@ -54,7 +54,6 @@ public class S3Controller {
 
             return ResponseEntity.ok(Map.of("url", url, "key", key));
         } catch (Exception e) {
-            e.printStackTrace();
             return ResponseEntity.internalServerError().body(Map.of("error", "Could not generate presigned URL"));
         }
     }
@@ -83,7 +82,6 @@ public class S3Controller {
 
             return ResponseEntity.ok(Map.of("url", url));
         } catch (Exception e) {
-            e.printStackTrace();
             return ResponseEntity.internalServerError().body(Map.of("error", "Could not generate presigned URL"));
         }
     }

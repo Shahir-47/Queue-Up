@@ -1,6 +1,8 @@
 package com.QueueUp.Backend.socket;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
@@ -12,6 +14,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @Service
 public class SocketService {
 
+    private static final Logger logger = LoggerFactory.getLogger(SocketService.class);
     private final Map<Long, WebSocketSession> userSessions = new ConcurrentHashMap<>();
     private final ObjectMapper objectMapper;
 
@@ -45,7 +48,7 @@ public class SocketService {
 
                 session.sendMessage(new TextMessage(json));
             } catch (IOException e) {
-                e.printStackTrace();
+                logger.error("Error sending message");
             }
         }
         }
@@ -60,13 +63,8 @@ public class SocketService {
                     session.sendMessage(new TextMessage(message));
                 }
             } catch (IOException e) {
-                e.printStackTrace();
+                logger.error("Error broadcasting");
             }
         });
-    }
-
-    // Check if user is online
-    public boolean isUserOnline(Long userId) {
-        return userSessions.containsKey(userId);
     }
 }

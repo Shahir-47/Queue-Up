@@ -14,7 +14,7 @@ import java.util.Set;
 @NoArgsConstructor
 @AllArgsConstructor
 
-// Prevent infinite recursion in Lomboks equals/hashCode
+// Prevent infinite recursion in Lombok equals/hashCode
 @EqualsAndHashCode(exclude = {"likes", "dislikes", "matches", "topArtists", "topTracks", "savedTracks", "followedArtists"})
 public class User {
 

@@ -1,10 +1,12 @@
 package com.QueueUp.Backend.socket;
 
+import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 import org.springframework.web.util.UriComponentsBuilder;
+import java.util.Objects;
 
 @Component
 public class WebSocketHandler extends TextWebSocketHandler {
@@ -16,7 +18,7 @@ public class WebSocketHandler extends TextWebSocketHandler {
     }
 
     @Override
-    public void afterConnectionEstablished(WebSocketSession session) throws Exception {
+    public void afterConnectionEstablished(@NonNull WebSocketSession session) throws Exception {
         // Extract userId from query params
         Long userId = getUserIdFromSession(session);
 
@@ -28,17 +30,17 @@ public class WebSocketHandler extends TextWebSocketHandler {
     }
 
     @Override
-    public void afterConnectionClosed(WebSocketSession session, CloseStatus status) throws Exception {
+    public void afterConnectionClosed(@NonNull WebSocketSession session, @NonNull CloseStatus status) {
         socketService.removeSession(session);
     }
 
     private Long getUserIdFromSession(WebSocketSession session) {
         try {
-            String query = session.getUri().getQuery();
-            return Long.valueOf(UriComponentsBuilder.fromUriString("?" + query)
+            String query = Objects.requireNonNull(session.getUri()).getQuery();
+            return Long.valueOf(Objects.requireNonNull(UriComponentsBuilder.fromUriString("?" + query)
                     .build()
                     .getQueryParams()
-                    .getFirst("userId"));
+                    .getFirst("userId")));
         } catch (Exception e) {
             return null;
         }

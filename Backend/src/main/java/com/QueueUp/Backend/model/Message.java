@@ -34,9 +34,6 @@ public class Message {
         return sender != null ? sender.getId() : null;
     }
 
-    @JsonIgnoreProperties({"password", "email", "spotify", "matches", "likes", "dislikes"})
-    public User getSender() { return sender; }
-
     // messages
     @Column(columnDefinition = "TEXT")
     private String content;
