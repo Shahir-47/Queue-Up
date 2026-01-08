@@ -1,31 +1,35 @@
 package com.QueueUp.Backend.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 import java.util.List;
 
 @Data
+@NoArgsConstructor
+@AllArgsConstructor
 public class MatchProfileDto {
+    @JsonProperty("_id")
     private Long id;
+
     private String name;
     private String image;
     private Integer age;
     private String bio;
     private int score;
 
-    // We return simple lists of objects for the frontend
     private List<ItemDto> commonArtists;
     private List<ItemDto> commonTracks;
+    private List<ItemDto> commonSaved;
+    private List<ItemDto> commonFollowed;
 
     @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
     public static class ItemDto {
-        private String id;   // Spotify ID
-        private String name; // Human readable name
+        private String id;
+        private String name;
         private String imageUrl;
-
-        public ItemDto(String id, String name, String imageUrl) {
-            this.id = id;
-            this.name = name;
-            this.imageUrl = imageUrl;
-        }
     }
 }
