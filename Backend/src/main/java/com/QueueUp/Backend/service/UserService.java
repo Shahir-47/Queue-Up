@@ -15,18 +15,17 @@ public class UserService {
     private final UserRepository userRepository;
     private final Cloudinary cloudinary;
 
-    // Dependency Injection
     public UserService(UserRepository userRepository, Cloudinary cloudinary) {
         this.userRepository = userRepository;
         this.cloudinary = cloudinary;
     }
 
     public User updateProfile(Long userId, Map<String, Object> updateData) {
-        // 1. Find the User
+        // Find the User
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        // 2. Handle Image Upload
+        // Handle Image Upload
         if (updateData.containsKey("image")) {
             String imageBase64 = (String) updateData.get("image");
 
@@ -43,11 +42,25 @@ public class UserService {
             }
         }
 
-        // 3. Update other fields (Dynamic updates)
-        // In Java, we usually update specific fields explicitly for type safety
-        if (updateData.containsKey("name")) user.setName((String) updateData.get("name"));
-        if (updateData.containsKey("bio")) user.setBio((String) updateData.get("bio"));
-        if (updateData.containsKey("age")) user.setAge((Integer) updateData.get("age"));
+        // Update other fields
+        if (updateData.containsKey("name")) {
+            user.setName((String) updateData.get("name"));
+        }
+        if (updateData.containsKey("bio")) {
+            user.setBio((String) updateData.get("bio"));
+        }
+
+        if (updateData.containsKey("age")) {
+            Object ageObj = updateData.get("age");
+            if (ageObj != null) {
+                try {
+                    int parsedAge = Integer.parseInt(ageObj.toString());
+                    user.setAge(parsedAge);
+                } catch (NumberFormatException e) {
+                    throw new RuntimeException("Invalid age format: must be a number");
+                }
+            }
+        }
 
         return userRepository.save(user);
     }

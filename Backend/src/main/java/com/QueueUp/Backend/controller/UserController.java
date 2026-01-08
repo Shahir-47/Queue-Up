@@ -19,9 +19,8 @@ public class UserController {
 
     @PutMapping("/update")
     public ResponseEntity<?> updateProfile(@RequestBody Map<String, Object> updateData,
-                                           jakarta.servlet.http.HttpServletRequest request) { // <--- Add request param
+                                           jakarta.servlet.http.HttpServletRequest request) {
         try {
-            // RETRIEVE REAL ID FROM MIDDLEWARE
             Long currentUserId = (Long) request.getAttribute("userId");
 
             // Safety check
