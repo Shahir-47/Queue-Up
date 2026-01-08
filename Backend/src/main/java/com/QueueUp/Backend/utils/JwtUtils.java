@@ -23,7 +23,6 @@ public class JwtUtils {
         return Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));
     }
 
-    // Equivalent to signToken(id)
     public String generateToken(Long userId) {
         return Jwts.builder()
                 .setSubject(String.valueOf(userId))
@@ -33,7 +32,6 @@ public class JwtUtils {
                 .compact();
     }
 
-    // Equivalent to jwt.verify(token)
     public Long validateTokenAndGetUserId(String token) {
         Claims claims = Jwts.parserBuilder()
                 .setSigningKey(getSigningKey())
