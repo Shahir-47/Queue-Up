@@ -19,7 +19,7 @@ public class LinkPreviewController {
 
         try {
             Document doc = Jsoup.connect(url)
-                    .userAgent("Mozilla/5.0") // Pretend to be a browser so sites dont block us
+                    .userAgent("Mozilla/5.0") // Pretend to be a browser so sites don't block us
                     .timeout(5000)
                     .get();
 
@@ -31,7 +31,7 @@ public class LinkPreviewController {
             data.put("image", getMetaTag(doc, "og:image"));
             data.put("url", url);
 
-            // Fallback to standard html tags if opengraph is missing
+            // Fallback to standard HTML tags if opengraph is missing
             if (data.get("title").isEmpty()) data.put("title", doc.title());
             if (data.get("description").isEmpty()) {
                 data.put("description", getMetaTag(doc, "description"));

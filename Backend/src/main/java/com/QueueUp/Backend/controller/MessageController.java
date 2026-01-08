@@ -27,7 +27,6 @@ public class MessageController {
             Message newMessage = messageService.sendMessage(senderId, request);
             return ResponseEntity.status(201).body(Map.of("success", true, "message", newMessage));
         } catch (Exception e) {
-            e.printStackTrace();
             return ResponseEntity.status(500).body(Map.of("success", false, "message", e.getMessage()));
         }
     }
@@ -40,7 +39,6 @@ public class MessageController {
 
             return ResponseEntity.ok(Map.of("success", true, "messages", messages));
         } catch (Exception e) {
-            e.printStackTrace();
             return ResponseEntity.status(500).body(Map.of("success", false, "message", "Internal server error"));
         }
     }
