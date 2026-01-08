@@ -1,5 +1,7 @@
 package com.QueueUp.Backend.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDateTime;
@@ -14,6 +16,7 @@ public class Message {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @JsonProperty("_id")
     private Long id;
 
     // Link to the User who sent it
@@ -26,7 +29,15 @@ public class Message {
     @JoinColumn(name = "receiver_id", nullable = false)
     private User receiver;
 
-    // TEXT allows for long messages
+    @JsonProperty("senderId")
+    public Long getSenderId() {
+        return sender != null ? sender.getId() : null;
+    }
+
+    @JsonIgnoreProperties({"password", "email", "spotify", "matches", "likes", "dislikes"})
+    public User getSender() { return sender; }
+
+    // messages
     @Column(columnDefinition = "TEXT")
     private String content;
 
@@ -35,7 +46,7 @@ public class Message {
     @OneToMany(mappedBy = "message", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Attachment> attachments = new ArrayList<>();
 
-    // Link Previews are just simple strings, so we use ElementCollection
+    // List of url stored in s3 buckets
     @ElementCollection
     @CollectionTable(name = "message_link_previews", joinColumns = @JoinColumn(name = "message_id"))
     @Column(name = "preview_url")

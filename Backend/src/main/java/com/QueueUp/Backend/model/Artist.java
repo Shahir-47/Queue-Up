@@ -4,13 +4,16 @@ import jakarta.persistence.*;
 import lombok.*;
 
 @Entity
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
 public class Artist {
 
     @Id
-    private String spotifyId; // We use the real Spotify ID as the database Primary Key
+    @EqualsAndHashCode.Include
+    private String spotifyId;
 
     private String name;
     private String imageUrl;

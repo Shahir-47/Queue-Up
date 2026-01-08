@@ -1,5 +1,7 @@
 package com.QueueUp.Backend.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDateTime;
@@ -7,19 +9,21 @@ import java.util.HashSet;
 import java.util.Set;
 
 @Entity
-@Table(name = "app_user") // "User" is a reserved SQL keyword, so we name the table "app_user"
+@Table(name = "app_user")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-// We must exclude these collections from equals/hashCode to prevent infinite memory loops
-@EqualsAndHashCode(exclude = {"likes", "dislikes", "matches", "topArtists", "topTracks"})
+
+// Prevent infinite recursion in Lomboks equals/hashCode
+@EqualsAndHashCode(exclude = {"likes", "dislikes", "matches", "topArtists", "topTracks", "savedTracks", "followedArtists"})
 public class User {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @JsonProperty("_id")
     private Long id;
 
-    // --- Basic Info ---
+    // Basic Info
     @Column(nullable = false)
     private String name;
 
@@ -32,18 +36,24 @@ public class User {
     @Column(nullable = false)
     private Integer age;
 
+    @Column(columnDefinition = "TEXT")
     private String bio = "";
+
+    @Column(columnDefinition = "TEXT")
     private String image = "";
 
-    // --- Spotify Auth Tokens ---
-    // We store the tokens here directly on the user
+    // Spotify Auth Tokens
     private String spotifyId;
+
+    @Column(columnDefinition = "TEXT")
     private String spotifyAccessToken;
+
+    @Column(columnDefinition = "TEXT")
     private String spotifyRefreshToken;
+
     private LocalDateTime spotifyTokenExpiresAt;
 
-    // --- RELATIONAL MUSIC DATA ---
-    // This creates a "Join Table" called 'user_top_artists' automatically
+    // MUSIC DATA
     @ManyToMany(cascade = {CascadeType.PERSIST, CascadeType.MERGE})
     @JoinTable(
             name = "user_top_artists",
@@ -52,7 +62,6 @@ public class User {
     )
     private Set<Artist> topArtists = new HashSet<>();
 
-    // This creates a "Join Table" called 'user_top_tracks'
     @ManyToMany(cascade = {CascadeType.PERSIST, CascadeType.MERGE})
     @JoinTable(
             name = "user_top_tracks",
@@ -62,8 +71,26 @@ public class User {
     private Set<Track> topTracks = new HashSet<>();
 
 
-    // --- SOCIAL GRAPH  ---
-    // Likes
+    @ManyToMany(cascade = {CascadeType.PERSIST, CascadeType.MERGE})
+    @JoinTable(
+            name = "user_saved_tracks",
+            joinColumns = @JoinColumn(name = "user_id"),
+            inverseJoinColumns = @JoinColumn(name = "track_id")
+    )
+    private Set<Track> savedTracks = new HashSet<>();
+
+    @ManyToMany(cascade = {CascadeType.PERSIST, CascadeType.MERGE})
+    @JoinTable(
+            name = "user_followed_artists",
+            joinColumns = @JoinColumn(name = "user_id"),
+            inverseJoinColumns = @JoinColumn(name = "artist_id")
+    )
+    private Set<Artist> followedArtists = new HashSet<>();
+
+
+    // SOCIAL GRAPH
+
+    @JsonIgnore
     @ManyToMany
     @JoinTable(
             name = "user_likes",
@@ -72,7 +99,7 @@ public class User {
     )
     private Set<User> likes = new HashSet<>();
 
-    // Dislikes
+    @JsonIgnore
     @ManyToMany
     @JoinTable(
             name = "user_dislikes",
@@ -81,7 +108,7 @@ public class User {
     )
     private Set<User> dislikes = new HashSet<>();
 
-    // Mutual Likes
+    @JsonIgnore
     @ManyToMany
     @JoinTable(
             name = "user_matches",
@@ -90,7 +117,7 @@ public class User {
     )
     private Set<User> matches = new HashSet<>();
 
-    // --- TIMESTAMPS ---
+    // TIMESTAMPS
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 

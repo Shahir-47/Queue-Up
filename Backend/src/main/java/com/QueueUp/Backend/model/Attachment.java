@@ -1,5 +1,6 @@
 package com.QueueUp.Backend.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -23,9 +24,9 @@ public class Attachment {
     private String name; // Original filename
 
     @Column(nullable = false)
-    private String ext;  // Extension (jpg, pdf)
+    private String ext;  // Extension
 
-    // Using the Enum we created in Step 1
+    // media type
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private AttachmentCategory category;
@@ -33,6 +34,6 @@ public class Attachment {
     // The link back to the Message
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "message_id")
-    @ToString.Exclude // Prevents logging errors
+    @JsonIgnore
     private Message message;
 }

@@ -4,15 +4,18 @@ import jakarta.persistence.*;
 import lombok.*;
 
 @Entity
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
 public class Track {
 
     @Id
+    @EqualsAndHashCode.Include
     private String spotifyId;
 
     private String name;
-    private String artistString; // e.g., "Drake, Future"
+    private String artistString;
     private String imageUrl;
 }
