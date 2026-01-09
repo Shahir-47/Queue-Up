@@ -24,12 +24,12 @@ public class SocketService {
 
     public void addSession(Long userId, WebSocketSession session) {
         userSessions.put(userId, session);
-        System.out.println("User connected: " + userId);
+        logger.info("User connected: {}", userId);
     }
 
     public void removeSession(WebSocketSession session) {
         userSessions.values().remove(session);
-        System.out.println("User disconnected");
+        logger.info("User disconnected");
     }
 
     public void sendMessageToUser(Long userId, String eventName, Object payload) {
@@ -54,17 +54,25 @@ public class SocketService {
         }
 
     // Broadcast to EVERYONE
-    public void broadcast(String eventName, String jsonPayload) {
-        String message = String.format("{\"type\": \"%s\", \"payload\": %s}", eventName, jsonPayload);
+    public void broadcast(String eventName, Object payload) {
+        try {
+            Map<String, Object> socketMessage = Map.of(
+                    "type", eventName,
+                    "payload", payload
+            );
+            String json = objectMapper.writeValueAsString(socketMessage);
 
-        userSessions.values().forEach(session -> {
-            try {
-                if (session.isOpen()) {
-                    session.sendMessage(new TextMessage(message));
+            userSessions.values().forEach(session -> {
+                try {
+                    if (session.isOpen()) {
+                        session.sendMessage(new TextMessage(json));
+                    }
+                } catch (IOException e) {
+                    logger.error("Error broadcasting message", e);
                 }
-            } catch (IOException e) {
-                logger.error("Error broadcasting");
-            }
-        });
+            });
+        } catch (IOException e) {
+            logger.error("Error serializing broadcast message", e);
+        }
     }
 }

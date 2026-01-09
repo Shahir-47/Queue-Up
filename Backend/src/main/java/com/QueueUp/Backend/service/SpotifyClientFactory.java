@@ -11,6 +11,9 @@ import se.michaelthelin.spotify.model_objects.credentials.AuthorizationCodeCrede
 import java.net.URI;
 import java.time.LocalDateTime;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 @Service
 public class SpotifyClientFactory {
 
@@ -24,6 +27,8 @@ public class SpotifyClientFactory {
     private String redirectUri;
 
     private final UserRepository userRepository;
+
+    private static final Logger logger = LoggerFactory.getLogger(SpotifyClientFactory.class);
 
     public SpotifyClientFactory(UserRepository userRepository) {
         this.userRepository = userRepository;
@@ -47,7 +52,7 @@ public class SpotifyClientFactory {
         // Check Expiration & Refresh
         if (isTokenExpired(user.getSpotifyTokenExpiresAt())) {
             try {
-                System.out.println("Token expired for user " + userId + ". Refreshing...");
+                logger.info("Token expired for user {}. Refreshing...", userId);
 
                 AuthorizationCodeCredentials newTokens = client.authorizationCodeRefresh().build().execute();
 
@@ -72,7 +77,7 @@ public class SpotifyClientFactory {
                 System.out.println("Tokens refreshed.");
 
             } catch (Exception e) {
-                System.err.println("Failed to refresh Spotify token: " + e.getMessage());
+                logger.error("Failed to refresh Spotify token: {}", e.getMessage());
             }
         }
 

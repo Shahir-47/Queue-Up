@@ -31,6 +31,7 @@ public class User {
     private String email;
 
     @Column(nullable = false)
+    @JsonIgnore
     private String password;
 
     @Column(nullable = false)
@@ -46,9 +47,11 @@ public class User {
     private String spotifyId;
 
     @Column(columnDefinition = "TEXT")
+    @JsonIgnore
     private String spotifyAccessToken;
 
     @Column(columnDefinition = "TEXT")
+    @JsonIgnore
     private String spotifyRefreshToken;
 
     private LocalDateTime spotifyTokenExpiresAt;

@@ -48,14 +48,14 @@ public class AuthController {
             setJwtCookie(response, token);
 
             // Broadcast AFTER the transaction in AuthService has committed
-            socketService.broadcast("newUserProfile", "{\"newUserId\": " + user.getId() + "}");
+            socketService.broadcast("newUserProfile", Map.of("newUserId", user.getId()));
 
             return ResponseEntity.status(201).body(Map.of(
                     "success", true,
                     "user", user
             ));
         } catch (Exception e) {
-            logger.error("Signup failed for email: {}", body.get("email"), e);
+            logger.error("Signup failed for email: {}", e.getMessage());
             return ResponseEntity.badRequest().body(Map.of("success", false, "message", e.getMessage()));
         }
     }
