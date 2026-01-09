@@ -43,6 +43,9 @@ public class User {
     @Column(columnDefinition = "TEXT")
     private String image = "";
 
+    @Column(columnDefinition = "boolean default false")
+    private Boolean isBot = false;
+
     // Spotify Auth Tokens
     private String spotifyId;
 

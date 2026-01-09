@@ -13,10 +13,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import se.michaelthelin.spotify.SpotifyApi;
 import se.michaelthelin.spotify.enums.ModelObjectType;
+import org.springframework.web.client.RestTemplate;
 
 import java.io.IOException;
 import java.time.LocalDateTime;
-import java.util.Map;
+import java.util.*;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,17 +31,20 @@ public class AuthService {
     private final TrackRepository trackRepository;
     private final Cloudinary cloudinary;
     private final SpotifyClientFactory spotifyClientFactory;
+    private final OpenAIService openAiService;
 
     public AuthService(UserRepository userRepository,
                        ArtistRepository artistRepository,
                        TrackRepository trackRepository,
                        Cloudinary cloudinary,
-                       SpotifyClientFactory spotifyClientFactory) {
+                       SpotifyClientFactory spotifyClientFactory,
+                       OpenAIService openAiService) {
         this.userRepository = userRepository;
         this.artistRepository = artistRepository;
         this.trackRepository = trackRepository;
         this.cloudinary = cloudinary;
         this.spotifyClientFactory = spotifyClientFactory;
+        this.openAiService = openAiService;
     }
 
     @Transactional
@@ -129,55 +133,88 @@ public class AuthService {
     }
 
     // HELPER METHODS
+    private void createDemoUsers(User sourceUser) {
+        // Basic check if user has music
+        boolean hasMusic = !sourceUser.getTopArtists().isEmpty() || !sourceUser.getTopTracks().isEmpty();
+        if (!hasMusic) return;
+
+        // Get a list of user's music for the AI prompt
+        List<String> musicSample = sourceUser.getTopArtists().stream()
+                .map(Artist::getName).limit(5).toList();
+
+        // Create 2 Bots
+        for (int i = 0; i < 2; i++) {
+            User bot = new User();
+
+            // 1. Generate Identity via AI
+            int ageVariance = (int) (Math.random() * 5) - 2; // -2 to +2 years
+            int botAge = Math.max(18, sourceUser.getAge() + ageVariance);
+
+            Map<String, String> profile = openAiService.generateBotProfile(botAge, musicSample);
+
+            bot.setName(profile.getOrDefault("name", "Music Fan"));
+            bot.setBio(profile.getOrDefault("bio", "Here for the vibes."));
+            bot.setAge(botAge);
+            bot.setEmail("bot_" + System.currentTimeMillis() + "_" + i + "@queueup.ai");
+            bot.setPassword(BCrypt.withDefaults().hashToString(12, "bot_pass".toCharArray()));
+
+            // 2. Persistent Unique Picture (Download -> Upload to Cloudinary)
+            try {
+                // Using a timestamp (+i) to ensure we get a fresh face for each bot
+                String faceUrl = "https://thispersondoesnotexist.com/?t=" + (System.currentTimeMillis() + i);
+                byte[] imageBytes = new RestTemplate().getForObject(faceUrl, byte[].class);
+
+                @SuppressWarnings("unchecked")
+                Map<String, Object> uploadResult = cloudinary.uploader().upload(imageBytes,
+                        ObjectUtils.asMap("folder", "bot_profiles"));
+
+                bot.setImage((String) uploadResult.get("secure_url"));
+            } catch (Exception e) {
+                bot.setImage("https://api.dicebear.com/7.x/avataaars/svg?seed=" + i); // Fallback
+            }
+
+            // 3. Mark as Bot
+            bot.setIsBot(true);
+
+            // 4. Share Music Subsets (Variance: 10 to Max items)
+            // We now populate ALL categories, not just Top Artists
+            bot.getTopArtists().addAll(getRandomSubset(sourceUser.getTopArtists()));
+            bot.getTopTracks().addAll(getRandomSubset(sourceUser.getTopTracks()));
+            bot.getSavedTracks().addAll(getRandomSubset(sourceUser.getSavedTracks()));
+            bot.getFollowedArtists().addAll(getRandomSubset(sourceUser.getFollowedArtists()));
+
+            // 5. Bot Likes User (So it's a match when User likes them)
+            // We need to save the bot first to get an ID
+            User savedBot = userRepository.save(bot);
+
+            savedBot.getLikes().add(sourceUser); // Bot likes User
+            userRepository.save(savedBot);
+        }
+    }
 
     /**
-     * Creates 5 fake users who share the same music taste as the signed-up user.
-     * This ensures the "Potential Matches" list is populated and high-scoring.
+     * Helper to get a random subset of music items.
+     * Logic: If user has <= 10 items, take all.
+     * Else, take a random number between 10 and Total.
      */
-    private void createDemoUsers(User sourceUser) {
-        // Only create demo users if the source user actually has music data.
-        boolean hasMusicData = !sourceUser.getTopArtists().isEmpty() ||
-                !sourceUser.getTopTracks().isEmpty() ||
-                !sourceUser.getSavedTracks().isEmpty() ||
-                !sourceUser.getFollowedArtists().isEmpty();
+    private <T> List<T> getRandomSubset(Set<T> sourceSet) {
+        List<T> list = new ArrayList<>(sourceSet);
+        if (list.isEmpty()) return Collections.emptyList();
 
-        if (!hasMusicData) {
-            return;
+        Collections.shuffle(list);
+
+        int max = list.size();
+        int minLimit = 10;
+        int targetCount;
+
+        if (max <= minLimit) {
+            targetCount = max;
+        } else {
+            // Random integer between 10 and max (inclusive)
+            targetCount = minLimit + (int)(Math.random() * (max - minLimit + 1));
         }
 
-        String[] names = {"Riley", "Casey", "Jamie", "Morgan", "Quinn"};
-        String[] bios = {
-                "Music is my escape 🎧",
-                "Always looking for new concert buddies 🎸",
-                "Vibing to the same beat.",
-                "Let's share playlists!",
-                "Coffee and Vinyls ☕"
-        };
-
-        for (int i = 0; i < names.length; i++) {
-            User demo = new User();
-
-            // Basic Info
-            demo.setName(names[i]);
-            // Ensure email is unique by appending source ID and timestamp
-            demo.setEmail(names[i].toLowerCase() + "_" + sourceUser.getId() + "_" + System.currentTimeMillis() + "@demo.com");
-            demo.setPassword(BCrypt.withDefaults().hashToString(12, "password".toCharArray()));
-            // Make age roughly close to the user's age
-            demo.setAge(sourceUser.getAge() + (i % 5) - 2);
-            demo.setBio(bios[i]);
-
-            // Random Avatar
-            demo.setImage("https://api.dicebear.com/7.x/miniavs/svg?seed=" + (sourceUser.getId() + i + 100));
-
-            // Copy Music Data into separate collections
-            demo.getTopArtists().addAll(sourceUser.getTopArtists());
-            demo.getTopTracks().addAll(sourceUser.getTopTracks());
-            demo.getSavedTracks().addAll(sourceUser.getSavedTracks());
-            demo.getFollowedArtists().addAll(sourceUser.getFollowedArtists());
-
-            // Save to DB
-            userRepository.save(demo);
-        }
+        return list.subList(0, targetCount);
     }
 
     private Integer parseIntSafely(Object obj) {

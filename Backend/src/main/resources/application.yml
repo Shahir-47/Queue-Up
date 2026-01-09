@@ -49,3 +49,7 @@ spotify:
 
 jwt:
   secret: ${JWT_SECRET}
+
+openai:
+  api:
+    key: ${OPENAI_API_KEY}

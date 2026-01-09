@@ -22,15 +22,17 @@ public class MessageService {
     private final UserRepository userRepository;
     private final Cloudinary cloudinary;
     private final SocketService socketService;
+    private final OpenAIService openAiService;
 
     public MessageService(MessageRepository messageRepository,
                           UserRepository userRepository,
                           Cloudinary cloudinary,
-                          SocketService socketService) {
+                          SocketService socketService, OpenAIService openAiService) {
         this.messageRepository = messageRepository;
         this.userRepository = userRepository;
         this.cloudinary = cloudinary;
         this.socketService = socketService;
+        this.openAiService = openAiService;
     }
 
     @Transactional
@@ -62,8 +64,7 @@ public class MessageService {
                 // If URL exists use it, else if Base64 exists upload it
                 if (attInput.getUrl() != null && !attInput.getUrl().isEmpty()) {
                     attachment.setUrl(attInput.getUrl());
-                }
-                else if (attInput.getData() != null && attInput.getData().startsWith("data:")) {
+                } else if (attInput.getData() != null && attInput.getData().startsWith("data:")) {
                     // Cloudinary Upload
                     try {
                         @SuppressWarnings("unchecked")
@@ -87,19 +88,63 @@ public class MessageService {
         // Save to DB
         Message savedMessage = messageRepository.save(message);
 
-        // PREPARE SOCKET PAYLOAD
-        Map<String, Object> socketPayload = new HashMap<>();
-        socketPayload.put("_id", savedMessage.getId());
-        socketPayload.put("content", savedMessage.getContent());
-        socketPayload.put("senderId", sender.getId());
-        socketPayload.put("receiverId", receiver.getId());
-        socketPayload.put("createdAt", savedMessage.getCreatedAt().toString());
-        socketPayload.put("attachments", savedMessage.getAttachments());
+        // Notify Receiver via Socket
+        sendSocketNotification(savedMessage);
 
-        // Send
-        socketService.sendMessageToUser(receiver.getId(), "newMessage", socketPayload);
+        // if replying to a bot
+        if (Boolean.TRUE.equals(receiver.getIsBot())) {
+            triggerBotReply(receiver, sender);
+        }
 
         return savedMessage;
+    }
+
+    // Helper to handle the bot's response asynchronously
+    private void triggerBotReply(User bot, User realUser) {
+        new Thread(() -> {
+            try {
+                // Simulate typing delay (3-6 seconds)
+                Thread.sleep(3000 + (long) (Math.random() * 3000));
+
+                // Fetch conversation history for context
+                List<Message> history = messageRepository.findConversation(realUser.getId(), bot.getId());
+
+                // Limit to last 10 for AI context window
+                if (history.size() > 10) {
+                    history = history.subList(history.size() - 10, history.size());
+                }
+
+                // Generate Reply
+                String replyContent = openAiService.generateChatReply(bot.getName(), bot.getBio(), history);
+
+                // Save Bot Message
+                Message botMsg = new Message();
+                botMsg.setSender(bot);
+                botMsg.setReceiver(realUser);
+                botMsg.setContent(replyContent);
+                botMsg.setCreatedAt(java.time.LocalDateTime.now()); // Ensure timestamp is set
+
+                Message savedBotMsg = messageRepository.save(botMsg);
+
+                // Send Socket Event to Real User
+                sendSocketNotification(savedBotMsg);
+
+            } catch (Exception ignored) {
+            }
+        }).start();
+    }
+
+    // NEW HELPER METHOD TO REMOVE DUPLICATION
+    private void sendSocketNotification(Message message) {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("_id", message.getId());
+        payload.put("content", message.getContent());
+        payload.put("senderId", message.getSender().getId());
+        payload.put("receiverId", message.getReceiver().getId());
+        payload.put("createdAt", message.getCreatedAt().toString());
+        payload.put("attachments", message.getAttachments());
+
+        socketService.sendMessageToUser(message.getReceiver().getId(), "newMessage", payload);
     }
 
     public List<Message> getConversation(Long currentUserId, Long otherUserId) {
