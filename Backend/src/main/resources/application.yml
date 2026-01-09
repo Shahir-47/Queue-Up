@@ -1,0 +1,51 @@
+app:
+  client-url: ${APP_CLIENT_URL}
+
+spring:
+  application:
+    name: ${SPRING_APPLICATION_NAME}
+
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE}
+
+  datasource:
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+
+  jackson:
+    mapper:
+      accept-case-insensitive-enums: true
+
+  jpa:
+    # This tells Hibernate to create/update tables automatically based on Java code
+    hibernate:
+      ddl-auto: update
+    properties:
+      # This will print the SQL queries in console
+      format_sql: true
+    # This keeps the logs clean but shows the SQL
+    show-sql: true
+
+# Cloudinary Keys
+cloudinary:
+  cloud-name: ${CLOUDINARY_CLOUD_NAME}
+  api-key: ${CLOUDINARY_API_KEY}
+  api-secret: ${CLOUDINARY_API_SECRET}
+
+# AWS Keys
+aws:
+  access-key-id: ${AWS_ACCESS_KEY_ID}
+  secret-access-key: ${AWS_SECRET_ACCESS_KEY}
+  region: ${AWS_REGION}
+  s3-bucket: ${AWS_S3_BUCKET}
+
+# Spotify Keys
+spotify:
+  client-id: ${SPOTIFY_CLIENT_ID}
+  client-secret: ${SPOTIFY_CLIENT_SECRET}
+  redirect-uri: ${SPOTIFY_REDRIECT_URI}
+
+jwt:
+  secret: ${JWT_SECRET}
