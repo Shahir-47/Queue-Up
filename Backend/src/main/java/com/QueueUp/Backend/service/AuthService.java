@@ -149,7 +149,6 @@ public class AuthService {
                 !sourceUser.getFollowedArtists().isEmpty();
 
         if (!hasMusicData) {
-            System.out.println("⚠️ Skipping demo user creation: Source user has no music data.");
             return;
         }
 
