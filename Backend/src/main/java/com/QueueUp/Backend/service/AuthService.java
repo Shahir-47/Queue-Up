@@ -216,25 +216,25 @@ public class AuthService {
 
         try {
             // 1. Top Artists (Score: 3)
-            var artists = client.getUsersTopArtists().limit(10).time_range("long_term").build().execute();
+            var artists = client.getUsersTopArtists().limit(50).time_range("long_term").build().execute();
             for (var item : artists.getItems()) {
                 user.getTopArtists().add(saveOrGetArtist(item));
             }
 
             // 2. Top Tracks (Score: 2)
-            var tracks = client.getUsersTopTracks().limit(10).build().execute();
+            var tracks = client.getUsersTopTracks().limit(50).build().execute();
             for (var item : tracks.getItems()) {
                 user.getTopTracks().add(saveOrGetTrack(item));
             }
 
             // 3. Saved Tracks (Score: 1)
-            var saved = client.getUsersSavedTracks().limit(10).build().execute();
+            var saved = client.getUsersSavedTracks().limit(50).build().execute();
             for (var item : saved.getItems()) {
                 user.getSavedTracks().add(saveOrGetTrack(item.getTrack()));
             }
 
             // 4. Followed Artists (Score: 1)
-            var followed = client.getUsersFollowedArtists(ModelObjectType.ARTIST).limit(10).build().execute();
+            var followed = client.getUsersFollowedArtists(ModelObjectType.ARTIST).limit(50).build().execute();
             for (var item : followed.getItems()) {
                 user.getFollowedArtists().add(saveOrGetArtist(item));
             }
