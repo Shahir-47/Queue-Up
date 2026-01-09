@@ -6,7 +6,6 @@ import com.QueueUp.Backend.model.Track;
 import com.QueueUp.Backend.model.User;
 import com.QueueUp.Backend.repository.UserRepository;
 import com.QueueUp.Backend.socket.SocketService;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -23,12 +22,10 @@ public class MatchService {
 
     private final UserRepository userRepository;
     private final SocketService socketService;
-    private final ObjectMapper objectMapper;
 
-    public MatchService(UserRepository userRepository, SocketService socketService, ObjectMapper objectMapper) {
+    public MatchService(UserRepository userRepository, SocketService socketService) {
         this.userRepository = userRepository;
         this.socketService = socketService;
-        this.objectMapper = objectMapper;
     }
 
     // SWIPE LOGIC
@@ -61,7 +58,7 @@ public class MatchService {
         }
     }
 
-    private void sendMatchNotification(User recipient, User matchData) throws Exception {
+    private void sendMatchNotification(User recipient, User matchData) {
         Map<String, Object> payload = new HashMap<>();
         payload.put("_id", matchData.getId());
         payload.put("name", matchData.getName());
@@ -70,7 +67,7 @@ public class MatchService {
         socketService.sendMessageToUser(
                 recipient.getId(),
                 "newMatch",
-                objectMapper.writeValueAsString(payload)
+                payload
         );
     }
 
@@ -147,7 +144,7 @@ public class MatchService {
                 .collect(Collectors.toList());
     }
 
-     // Generic method to convert any list of music items into frontend DTOs.
+    // Generic method to convert any list of music items into frontend DTOs.
     private <T> List<MatchProfileDto.ItemDto> toDtoList(List<T> items,
                                                         Function<T, String> idMapper,
                                                         Function<T, String> nameMapper,
