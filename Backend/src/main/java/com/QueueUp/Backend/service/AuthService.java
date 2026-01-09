@@ -7,7 +7,6 @@ import com.QueueUp.Backend.model.User;
 import com.QueueUp.Backend.repository.ArtistRepository;
 import com.QueueUp.Backend.repository.TrackRepository;
 import com.QueueUp.Backend.repository.UserRepository;
-import com.QueueUp.Backend.socket.SocketService;
 import com.cloudinary.Cloudinary;
 import com.cloudinary.utils.ObjectUtils;
 import org.springframework.stereotype.Service;
@@ -31,20 +30,17 @@ public class AuthService {
     private final TrackRepository trackRepository;
     private final Cloudinary cloudinary;
     private final SpotifyClientFactory spotifyClientFactory;
-    private final SocketService socketService;
 
     public AuthService(UserRepository userRepository,
                        ArtistRepository artistRepository,
                        TrackRepository trackRepository,
                        Cloudinary cloudinary,
-                       SpotifyClientFactory spotifyClientFactory,
-                       SocketService socketService) {
+                       SpotifyClientFactory spotifyClientFactory) {
         this.userRepository = userRepository;
         this.artistRepository = artistRepository;
         this.trackRepository = trackRepository;
         this.cloudinary = cloudinary;
         this.spotifyClientFactory = spotifyClientFactory;
-        this.socketService = socketService;
     }
 
     @Transactional
@@ -118,10 +114,7 @@ public class AuthService {
             logger.warn("Failed to create demo users", e);
         }
 
-        // 8. Broadcast
-        socketService.broadcast("newUserProfile", "{\"newUserId\": " + savedUser.getId() + "}");
-
-        // 9. Return USER
+        // 8. Return USER
         return savedUser;
     }
 

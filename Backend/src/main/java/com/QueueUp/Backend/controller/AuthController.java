@@ -3,6 +3,7 @@ package com.QueueUp.Backend.controller;
 import com.QueueUp.Backend.model.User;
 import com.QueueUp.Backend.repository.UserRepository;
 import com.QueueUp.Backend.service.AuthService;
+import com.QueueUp.Backend.socket.SocketService;
 import com.QueueUp.Backend.utils.JwtUtils;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletResponse;
@@ -23,14 +24,19 @@ public class AuthController {
     private final AuthService authService;
     private final UserRepository userRepository;
     private final JwtUtils jwtUtils;
+    private final SocketService socketService;
 
     @Value("${spring.profiles.active:dev}")
     private String activeProfile;
 
-    public AuthController(AuthService authService, UserRepository userRepository, JwtUtils jwtUtils) {
+    public AuthController(AuthService authService,
+                          UserRepository userRepository,
+                          JwtUtils jwtUtils,
+                          SocketService socketService) {
         this.authService = authService;
         this.userRepository = userRepository;
         this.jwtUtils = jwtUtils;
+        this.socketService = socketService;
     }
 
     @PostMapping("/signup")
@@ -40,6 +46,9 @@ public class AuthController {
 
             String token = jwtUtils.generateToken(user.getId());
             setJwtCookie(response, token);
+
+            // Broadcast AFTER the transaction in AuthService has committed
+            socketService.broadcast("newUserProfile", "{\"newUserId\": " + user.getId() + "}");
 
             return ResponseEntity.status(201).body(Map.of(
                     "success", true,
