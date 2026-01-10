@@ -103,10 +103,29 @@ public class MessageService {
     private void triggerBotReply(User bot, User realUser) {
         new Thread(() -> {
             try {
-                // Simulate typing delay (3-6 seconds)
-                Thread.sleep(3000 + (long) (Math.random() * 3000));
+                Map<String, Object> typingPayload = new HashMap<>();
+                typingPayload.put("senderId", bot.getId());
 
-                // Fetch conversation history for context
+                // 1. Determine how long the bot should "fake think" (3-6 seconds)
+                long totalDelay = 3000 + (long) (Math.random() * 3000);
+                long elapsed = 0;
+
+                // 2. Loop to send "typing" pulses every 2 seconds
+                // This prevents the frontend bubble (which has a 3s timeout) from disappearing
+                while (elapsed < totalDelay) {
+                    socketService.sendMessageToUser(realUser.getId(), "typing", typingPayload);
+
+                    // Sleep for 2 seconds or whatever is left
+                    long sleepTime = Math.min(2000, totalDelay - elapsed);
+                    Thread.sleep(sleepTime);
+                    elapsed += sleepTime;
+                }
+
+                // 3. Send one final pulse right before calling OpenAI
+                // This keeps the bubble up during the API generation time
+                socketService.sendMessageToUser(realUser.getId(), "typing", typingPayload);
+
+                // 4. Fetch conversation history for context
                 List<Message> history = messageRepository.findConversation(realUser.getId(), bot.getId());
 
                 // Limit to last 10 for AI context window
@@ -114,19 +133,19 @@ public class MessageService {
                     history = history.subList(history.size() - 10, history.size());
                 }
 
-                // Generate Reply
+                // 5. Generate Reply
                 String replyContent = openAiService.generateChatReply(bot.getName(), bot.getBio(), history);
 
-                // Save Bot Message
+                // 6. Save Bot Message
                 Message botMsg = new Message();
                 botMsg.setSender(bot);
                 botMsg.setReceiver(realUser);
                 botMsg.setContent(replyContent);
-                botMsg.setCreatedAt(java.time.LocalDateTime.now()); // Ensure timestamp is set
+                botMsg.setCreatedAt(java.time.LocalDateTime.now());
 
                 Message savedBotMsg = messageRepository.save(botMsg);
 
-                // Send Socket Event to Real User
+                // 7. Send Socket Event
                 sendSocketNotification(savedBotMsg);
 
             } catch (Exception ignored) {
