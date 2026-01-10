@@ -60,7 +60,10 @@ public class SocketService {
                         "payload", payload
                 );
                 String json = objectMapper.writeValueAsString(socketMessage);
-                session.sendMessage(new TextMessage(json));
+
+                synchronized (session) {
+                    session.sendMessage(new TextMessage(json));
+                }
             } catch (IOException e) {
                 logger.error("Error sending message");
             }
@@ -78,7 +81,9 @@ public class SocketService {
             userSessions.values().forEach(session -> {
                 try {
                     if (session.isOpen()) {
-                        session.sendMessage(new TextMessage(json));
+                        synchronized (session) {
+                            session.sendMessage(new TextMessage(json));
+                        }
                     }
                 } catch (IOException e) {
                     logger.error("Error broadcasting message", e);
