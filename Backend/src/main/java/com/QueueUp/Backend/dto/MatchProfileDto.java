@@ -18,6 +18,7 @@ public class MatchProfileDto {
     private Integer age;
     private String bio;
     private int score;
+    private Boolean isBot;
 
     private List<ItemDto> commonArtists;
     private List<ItemDto> commonTracks;

@@ -24,12 +24,30 @@ public class SocketService {
 
     public void addSession(Long userId, WebSocketSession session) {
         userSessions.put(userId, session);
+
+        // 1. Broadcast to everyone else that this user is now Online
+        broadcast("userOnline", userId);
+
+        // 2. Send the list of ALL currently online users to this specific user
+        sendMessageToUser(userId, "getOnlineUsers", userSessions.keySet());
+
         logger.info("User connected: {}", userId);
     }
 
     public void removeSession(WebSocketSession session) {
-        userSessions.values().remove(session);
-        logger.info("User disconnected");
+        // Find the userId associated with this session
+        Long userId = userSessions.entrySet().stream()
+                .filter(entry -> entry.getValue().equals(session))
+                .map(Map.Entry::getKey)
+                .findFirst()
+                .orElse(null);
+
+        if (userId != null) {
+            userSessions.remove(userId);
+            // Broadcast that this user has gone Offline
+            broadcast("userOffline", userId);
+            logger.info("User disconnected: {}", userId);
+        }
     }
 
     public void sendMessageToUser(Long userId, String eventName, Object payload) {
@@ -37,23 +55,18 @@ public class SocketService {
 
         if (session != null && session.isOpen()) {
             try {
-                // Wrap the event and payload in a proper Map
                 Map<String, Object> socketMessage = Map.of(
                         "type", eventName,
                         "payload", payload
                 );
-
-                // Convert the WHOLE thing to JSON safely
                 String json = objectMapper.writeValueAsString(socketMessage);
-
                 session.sendMessage(new TextMessage(json));
             } catch (IOException e) {
                 logger.error("Error sending message");
             }
         }
-        }
+    }
 
-    // Broadcast to EVERYONE
     public void broadcast(String eventName, Object payload) {
         try {
             Map<String, Object> socketMessage = Map.of(

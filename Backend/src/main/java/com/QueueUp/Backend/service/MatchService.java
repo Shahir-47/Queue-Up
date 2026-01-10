@@ -125,6 +125,7 @@ public class MatchService {
         dto.setAge(other.getAge());
         dto.setBio(other.getBio());
         dto.setScore(score);
+        dto.setIsBot(other.getIsBot());
 
         dto.setCommonArtists(toDtoList(commonArtists, Artist::getSpotifyId, Artist::getName, Artist::getImageUrl));
         dto.setCommonTracks(toDtoList(commonTracks, Track::getSpotifyId, Track::getName, Track::getImageUrl));
