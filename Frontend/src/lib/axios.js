@@ -1,13 +1,7 @@
 import axios from "axios";
 
-// 1. CHANGE PORT TO 8080
-const BASE_URL =
-	import.meta.env.MODE === "development"
-		? "http://localhost:8080/api"
-		: import.meta.env.VITE_BACKEND_URL + "/api";
-
 export const axiosInstance = axios.create({
-	baseURL: BASE_URL,
+	baseURL: "/api",
 	withCredentials: true,
 });
 

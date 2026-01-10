@@ -9,4 +9,9 @@ export default defineConfig({
 	envPrefix: ["VITE_"],
 
 	plugins: [react(), tailwindcss()],
+	build: {
+		// Output to Spring Boot's static resources directory
+		outDir: "../Backend/src/main/resources/static",
+		emptyOutDir: true,
+	},
 });

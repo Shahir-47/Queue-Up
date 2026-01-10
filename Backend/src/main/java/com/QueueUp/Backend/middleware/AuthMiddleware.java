@@ -23,6 +23,12 @@ public class AuthMiddleware implements Filter {
         HttpServletResponse httpResponse = (HttpServletResponse) response;
         String path = httpRequest.getRequestURI();
 
+        // Allow all static resources and frontend routes to pass through.
+        if (!path.startsWith("/api")) {
+            chain.doFilter(request, response);
+            return;
+        }
+
         // public paths that do NOT need a token
         boolean isPublicAuthRoute = path.equals("/api/auth/login") || path.equals("/api/auth/signup") || path.startsWith("/api/auth/spotify/");
 

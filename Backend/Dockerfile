@@ -1,13 +1,22 @@
-# Build Stage
-FROM maven:3.9.9-eclipse-temurin-21 AS build
+# 1. Build Stage
+FROM maven:3.9.6-eclipse-temurin-21 AS build
 WORKDIR /app
-COPY pom.xml .
-COPY src ./src
+
+# Copy the entire project
+COPY . .
+
+# Move into Backend to start the process
+WORKDIR /app/Backend
+
+# Run the build.
 RUN mvn clean package -DskipTests
 
-# Run Stage
+# 2. Run Stage
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
-COPY --from=build /app/target/*.jar app.jar
+
+# Copy the final JAR file from the build stage
+COPY --from=build /app/Backend/target/*.jar app.jar
+
 EXPOSE 8080
 ENTRYPOINT ["java", "-jar", "app.jar"]

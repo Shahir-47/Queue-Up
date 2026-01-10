@@ -63,6 +63,7 @@ public class MatchService {
         payload.put("_id", matchData.getId());
         payload.put("name", matchData.getName());
         payload.put("image", matchData.getImage());
+        payload.put("isBot", matchData.getIsBot());
 
         socketService.sendMessageToUser(
                 recipient.getId(),

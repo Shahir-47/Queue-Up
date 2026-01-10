@@ -2,15 +2,8 @@
 
 // This file sets up a WebSocket client that mimics Socket.IO's API using standard WebSockets.
 // It handles connection, reconnection, and event listening in a way similar to Socket.IO.
-const baseUrl =
-	import.meta.env.MODE === "development"
-		? "localhost:8080"
-		: import.meta.env.VITE_BACKEND_URL.replace(/^https?:\/\//, "");
-
-const SOCKET_URL =
-	import.meta.env.MODE === "development"
-		? `ws://${baseUrl}/ws`
-		: `wss://${baseUrl}/ws`;
+const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+const SOCKET_URL = `${protocol}//${window.location.host}/ws`;
 
 let socket = null;
 let userId = null; // Store userId to allow reconnection
