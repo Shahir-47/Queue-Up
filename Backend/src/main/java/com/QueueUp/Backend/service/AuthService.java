@@ -7,17 +7,23 @@ import com.QueueUp.Backend.model.User;
 import com.QueueUp.Backend.repository.ArtistRepository;
 import com.QueueUp.Backend.repository.TrackRepository;
 import com.QueueUp.Backend.repository.UserRepository;
+import com.QueueUp.Backend.socket.SocketService;
 import com.cloudinary.Cloudinary;
 import com.cloudinary.utils.ObjectUtils;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.web.client.RestTemplate;
 import se.michaelthelin.spotify.SpotifyApi;
 import se.michaelthelin.spotify.enums.ModelObjectType;
-import org.springframework.web.client.RestTemplate;
 
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,20 +37,37 @@ public class AuthService {
     private final TrackRepository trackRepository;
     private final Cloudinary cloudinary;
     private final SpotifyClientFactory spotifyClientFactory;
-    private final OpenAIService openAiService;
+    private final SocketService socketService;
+    private final TransactionTemplate transactionTemplate;
+
+    // Generic bios since RandomUser api doesn't provide them
+    private static final List<String> GENERIC_BIOS = List.of(
+            "Music is my escape 🎧",
+            "Always looking for new vibes",
+            "Concert addict 🎫",
+            "Bass head 🔊",
+            "Here for the music",
+            "Spotify wrapped was embarrassing",
+            "Musician / Dreamer",
+            "Vinyl collector",
+            "Just listen.",
+            "In search of the perfect playlist"
+    );
 
     public AuthService(UserRepository userRepository,
                        ArtistRepository artistRepository,
                        TrackRepository trackRepository,
                        Cloudinary cloudinary,
                        SpotifyClientFactory spotifyClientFactory,
-                       OpenAIService openAiService) {
+                       SocketService socketService,
+                       PlatformTransactionManager transactionManager) {
         this.userRepository = userRepository;
         this.artistRepository = artistRepository;
         this.trackRepository = trackRepository;
         this.cloudinary = cloudinary;
         this.spotifyClientFactory = spotifyClientFactory;
-        this.openAiService = openAiService;
+        this.socketService = socketService;
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
     @Transactional
@@ -112,11 +135,20 @@ public class AuthService {
         }
 
         // 7. Create Demo Users
-        try {
-            createDemoUsers(savedUser);
-        } catch (Exception e) {
-            logger.warn("Failed to create demo users", e);
-        }
+        // We register a hook to run this ONLY after the database transaction successfully commits.
+        Long userId = savedUser.getId();
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                CompletableFuture.runAsync(() -> {
+                    try {
+                        createDemoUsers(userId);
+                    } catch (Exception e) {
+                        logger.warn("Failed to create demo users", e);
+                    }
+                });
+            }
+        });
 
         // 8. Return USER
         return savedUser;
@@ -133,69 +165,138 @@ public class AuthService {
     }
 
     // HELPER METHODS
-    private void createDemoUsers(User sourceUser) {
-        // Basic check if user has music
-        boolean hasMusic = !sourceUser.getTopArtists().isEmpty() || !sourceUser.getTopTracks().isEmpty();
-        if (!hasMusic) return;
+    /**
+     * Orchestrates the creation of demo users.
+     */
+    private void createDemoUsers(Long sourceUserId) {
+        // 1. Check eligibility
+        Boolean hasMusic = transactionTemplate.execute(status -> {
+            User u = userRepository.findById(sourceUserId).orElse(null);
+            if (u == null) return false;
+            return !u.getTopArtists().isEmpty() || !u.getTopTracks().isEmpty();
+        });
 
-        // Get a list of user's music for the AI prompt
-        List<String> musicSample = sourceUser.getTopArtists().stream()
-                .map(Artist::getName).limit(5).toList();
+        if (Boolean.FALSE.equals(hasMusic)) return;
 
-        // Create 2 Bots
+        // 2. Loop to create bots
         for (int i = 0; i < 2; i++) {
-            User bot = new User();
+            // Execute the creation of ONE bot in its own transaction.
+            Long newBotId = transactionTemplate.execute(status -> {
+                return createSingleBot(sourceUserId);
+            });
 
-            // 1. Generate Identity via AI
-            int ageVariance = (int) (Math.random() * 5) - 2; // -2 to +2 years
-            int botAge = Math.max(18, sourceUser.getAge() + ageVariance);
-
-            Map<String, String> profile = openAiService.generateBotProfile(botAge, musicSample);
-
-            bot.setName(profile.getOrDefault("name", "Music Fan"));
-            bot.setBio(profile.getOrDefault("bio", "Here for the vibes."));
-            bot.setAge(botAge);
-            bot.setEmail("bot_" + System.currentTimeMillis() + "_" + i + "@queueup.ai");
-            bot.setPassword(BCrypt.withDefaults().hashToString(12, "bot_pass".toCharArray()));
-
-            // 2. Persistent Unique Picture (Download -> Upload to Cloudinary)
-            try {
-                // Using a timestamp (+i) to ensure we get a fresh face for each bot
-                String faceUrl = "https://thispersondoesnotexist.com/?t=" + (System.currentTimeMillis() + i);
-                byte[] imageBytes = new RestTemplate().getForObject(faceUrl, byte[].class);
-
-                @SuppressWarnings("unchecked")
-                Map<String, Object> uploadResult = cloudinary.uploader().upload(imageBytes,
-                        ObjectUtils.asMap("folder", "bot_profiles"));
-
-                bot.setImage((String) uploadResult.get("secure_url"));
-            } catch (Exception e) {
-                bot.setImage("https://api.dicebear.com/7.x/avataaars/svg?seed=" + i); // Fallback
+            // 3. Broadcast AFTER the transaction has definitely committed.
+            if (newBotId != null) {
+                try {
+                    // Small delay to ensure DB propagation
+                    Thread.sleep(300);
+                    socketService.broadcast("newUserProfile", Map.of("newUserId", newBotId));
+                } catch (Exception e) {
+                    logger.warn("Error broadcasting new user", e);
+                }
             }
-
-            // 3. Mark as Bot
-            bot.setIsBot(true);
-
-            // 4. Share Music Subsets (Variance: 10 to Max items)
-            // We now populate ALL categories, not just Top Artists
-            bot.getTopArtists().addAll(getRandomSubset(sourceUser.getTopArtists()));
-            bot.getTopTracks().addAll(getRandomSubset(sourceUser.getTopTracks()));
-            bot.getSavedTracks().addAll(getRandomSubset(sourceUser.getSavedTracks()));
-            bot.getFollowedArtists().addAll(getRandomSubset(sourceUser.getFollowedArtists()));
-
-            // 5. Bot Likes User (So it's a match when User likes them)
-            // We need to save the bot first to get an ID
-            User savedBot = userRepository.save(bot);
-
-            savedBot.getLikes().add(sourceUser); // Bot likes User
-            userRepository.save(savedBot);
         }
     }
 
     /**
+     * Creates a single bot in the database using RandomUser.me api for the profile.
+     */
+    private Long createSingleBot(Long sourceUserId) {
+        User sourceUser = userRepository.findById(sourceUserId).orElse(null);
+        if (sourceUser == null) return null;
+
+        // 1. Fetch Random User Profile from external API
+        Map<String, Object> randomProfile = fetchRandomUserProfile();
+        if (randomProfile == null) return null; // Skip if API fails
+
+        User bot = new User();
+
+        // 2. Map Profile Data
+        // RandomUser.me returns: name { first, last }, email, dob { age }, picture { large }
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, String> nameMap = (Map<String, String>) randomProfile.get("name");
+            String fullName = nameMap.get("first") + " " + nameMap.get("last");
+            bot.setName(capitalize(fullName));
+
+            // Use email from API, but appending a timestamp to ensure uniqueness in DB
+            String rawEmail = (String) randomProfile.get("email");
+            bot.setEmail(System.currentTimeMillis() + "_" + rawEmail);
+
+            @SuppressWarnings("unchecked")
+            Map<String, Object> dobMap = (Map<String, Object>) randomProfile.get("dob");
+            bot.setAge((Integer) dobMap.get("age"));
+
+            // Pick a random bio
+            String randomBio = GENERIC_BIOS.get((int) (Math.random() * GENERIC_BIOS.size()));
+            bot.setBio(randomBio);
+
+            bot.setPassword(BCrypt.withDefaults().hashToString(12, "bot_pass".toCharArray()));
+            bot.setIsBot(true);
+
+            // 3. Image Handling
+            // get a stable URL from RandomUser.me and upload directly to cloudinary.
+            @SuppressWarnings("unchecked")
+            Map<String, String> pictureMap = (Map<String, String>) randomProfile.get("picture");
+            String pictureUrl = pictureMap.get("large");
+
+            try {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> uploadResult = cloudinary.uploader().upload(pictureUrl,
+                        ObjectUtils.asMap("folder", "bot_profiles"));
+                bot.setImage((String) uploadResult.get("secure_url"));
+            } catch (Exception e) {
+                // Fallback: just use the external URL if upload fails
+                bot.setImage(pictureUrl);
+            }
+
+        } catch (Exception e) {
+            logger.error("Error parsing RandomUser response", e);
+            return null;
+        }
+
+        // 4. Share Music Subsets
+        bot.getTopArtists().addAll(getRandomSubset(sourceUser.getTopArtists()));
+        bot.getTopTracks().addAll(getRandomSubset(sourceUser.getTopTracks()));
+        bot.getSavedTracks().addAll(getRandomSubset(sourceUser.getSavedTracks()));
+        bot.getFollowedArtists().addAll(getRandomSubset(sourceUser.getFollowedArtists()));
+
+        // 5. Save Bot and Link to User
+        User savedBot = userRepository.save(bot);
+
+        savedBot.getLikes().add(sourceUser);
+        userRepository.save(savedBot);
+
+        return savedBot.getId();
+    }
+
+    /**
+     * Fetches a single random user profile from https://randomuser.me
+     */
+    private Map<String, Object> fetchRandomUserProfile() {
+        try {
+            RestTemplate restTemplate = new RestTemplate();
+            // Request US nationality for English names, and specific fields
+            String url = "https://randomuser.me/api/?nat=us&inc=name,email,dob,picture";
+
+            @SuppressWarnings("unchecked")
+            Map<String, Object> response = restTemplate.getForObject(url, Map.class);
+
+            if (response != null && response.containsKey("results")) {
+                @SuppressWarnings("unchecked")
+                List<Map<String, Object>> results = (List<Map<String, Object>>) response.get("results");
+                if (!results.isEmpty()) {
+                    return results.get(0);
+                }
+            }
+        } catch (Exception e) {
+            logger.warn("Failed to fetch from randomuser.me", e);
+        }
+        return null;
+    }
+
+    /**
      * Helper to get a random subset of music items.
-     * Logic: If user has <= 10 items, take all.
-     * Else, take a random number between 10 and Total.
      */
     private <T> List<T> getRandomSubset(Set<T> sourceSet) {
         List<T> list = new ArrayList<>(sourceSet);
@@ -210,11 +311,15 @@ public class AuthService {
         if (max <= minLimit) {
             targetCount = max;
         } else {
-            // Random integer between 10 and max (inclusive)
             targetCount = minLimit + (int)(Math.random() * (max - minLimit + 1));
         }
 
         return list.subList(0, targetCount);
+    }
+
+    private String capitalize(String str) {
+        if (str == null || str.isEmpty()) return str;
+        return Character.toUpperCase(str.charAt(0)) + str.substring(1);
     }
 
     private Integer parseIntSafely(Object obj) {
@@ -245,25 +350,25 @@ public class AuthService {
         SpotifyApi client = spotifyClientFactory.getClientForUser(user.getId());
 
         try {
-            // 1. Top Artists (Score: 3)
+            // 1. Top Artists (score: 3)
             var artists = client.getUsersTopArtists().limit(50).time_range("long_term").build().execute();
             for (var item : artists.getItems()) {
                 user.getTopArtists().add(saveOrGetArtist(item));
             }
 
-            // 2. Top Tracks (Score: 2)
+            // 2. Top Tracks (score: 2)
             var tracks = client.getUsersTopTracks().limit(50).build().execute();
             for (var item : tracks.getItems()) {
                 user.getTopTracks().add(saveOrGetTrack(item));
             }
 
-            // 3. Saved Tracks (Score: 1)
+            // 3. Saved Tracks (score: 1)
             var saved = client.getUsersSavedTracks().limit(50).build().execute();
             for (var item : saved.getItems()) {
                 user.getSavedTracks().add(saveOrGetTrack(item.getTrack()));
             }
 
-            // 4. Followed Artists (Score: 1)
+            // 4. Followed Artists (score: 1)
             var followed = client.getUsersFollowedArtists(ModelObjectType.ARTIST).limit(50).build().execute();
             for (var item : followed.getItems()) {
                 user.getFollowedArtists().add(saveOrGetArtist(item));
@@ -282,9 +387,11 @@ public class AuthService {
                     Artist newA = new Artist();
                     newA.setSpotifyId(spotifyArtist.getId());
                     newA.setName(spotifyArtist.getName());
+
                     if (spotifyArtist.getImages() != null && spotifyArtist.getImages().length > 0) {
                         newA.setImageUrl(spotifyArtist.getImages()[0].getUrl());
                     }
+
                     return artistRepository.save(newA);
                 });
     }
@@ -295,13 +402,16 @@ public class AuthService {
                     Track newT = new Track();
                     newT.setSpotifyId(spotifyTrack.getId());
                     newT.setName(spotifyTrack.getName());
+
                     if (spotifyTrack.getAlbum().getImages() != null && spotifyTrack.getAlbum().getImages().length > 0) {
                         newT.setImageUrl(spotifyTrack.getAlbum().getImages()[0].getUrl());
                     }
+
                     String artistNames = java.util.Arrays.stream(spotifyTrack.getArtists())
                             .map(se.michaelthelin.spotify.model_objects.specification.ArtistSimplified::getName)
                             .reduce((a, b) -> a + ", " + b).orElse("Unknown");
                     newT.setArtistString(artistNames);
+
                     return trackRepository.save(newT);
                 });
     }

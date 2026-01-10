@@ -44,7 +44,7 @@ public class OpenAIService {
         messages.add(Map.of("role", "system", "content",
                 "You are " + botName + ". Your bio is: " + botBio + ". " +
                         "You are chatting on a dating app. Keep messages short, casual, and friendly. " +
-                        "Do not sound like a robot. Use emojis occasionally."));
+                        "Do B sound like a robot. Do not Use emojis."));
 
         // Add history (last 10 messages max)
         for (Message msg : history) {
