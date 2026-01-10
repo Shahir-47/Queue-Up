@@ -1,8 +1,16 @@
-// SOCKET_URL points to the /ws endpoint on port 8080
+// Frontend/src/socket/socket.client.js
+
+// This file sets up a WebSocket client that mimics Socket.IO's API using standard WebSockets.
+// It handles connection, reconnection, and event listening in a way similar to Socket.IO.
+const baseUrl =
+	import.meta.env.MODE === "development"
+		? "localhost:8080"
+		: import.meta.env.VITE_BACKEND_URL.replace(/^https?:\/\//, "");
+
 const SOCKET_URL =
 	import.meta.env.MODE === "development"
-		? "ws://localhost:8080/ws"
-		: "wss://" + window.location.host + "/ws";
+		? `ws://${baseUrl}/ws`
+		: `wss://${baseUrl}/ws`;
 
 let socket = null;
 let userId = null; // Store userId to allow reconnection
