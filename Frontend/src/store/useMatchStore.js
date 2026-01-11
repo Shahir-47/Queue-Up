@@ -3,9 +3,8 @@ import { axiosInstance } from "../lib/axios";
 import toast from "react-hot-toast";
 import { getSocket } from "../socket/socket.client";
 
-export const useMatchStore = create((set) => ({
+export const useMatchStore = create((set, get) => ({
 	matches: [], // list of matches
-	isLoadingMyMatches: false,
 	isLoadingUserProfiles: false,
 	userProfiles: [],
 	swipeFeedback: null,
@@ -77,11 +76,15 @@ export const useMatchStore = create((set) => ({
 
 			//listening for events from backend called newMatch
 			socket.on("newMatch", (newMatch) => {
-				set((state) => ({
-					matches: [...state.matches, newMatch],
-				}));
-				//notification
-				toast.success("You got a new match!");
+				const currentMatches = get().matches;
+				const isDuplicate = currentMatches.some((m) => m._id === newMatch._id);
+
+				if (!isDuplicate) {
+					set((state) => ({
+						matches: [...state.matches, newMatch],
+					}));
+					toast.success("You got a new match!");
+				}
 			});
 		} catch (error) {
 			console.log(error);

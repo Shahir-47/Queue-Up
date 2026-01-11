@@ -20,7 +20,11 @@ import org.springframework.web.client.RestTemplate;
 import se.michaelthelin.spotify.SpotifyApi;
 import se.michaelthelin.spotify.enums.ModelObjectType;
 
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.net.URL;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
@@ -44,13 +48,29 @@ public class AuthService {
     private final SpotifyClientFactory spotifyClientFactory;
     private final SocketService socketService;
     private final TransactionTemplate transactionTemplate;
+    private final Random random = new Random();
 
-    // Generic bios since RandomUser api doesn't provide them
+    // LOCAL DATA FOR BOTS
+    private static final List<String> MALE_NAMES = List.of(
+            "James", "John", "Robert", "Michael", "William", "David", "Richard", "Joseph", "Thomas", "Charles",
+            "Daniel", "Matthew", "Anthony", "Donald", "Mark", "Paul", "Steven", "Andrew", "Kenneth", "Joshua"
+    );
+
+    private static final List<String> FEMALE_NAMES = List.of(
+            "Mary", "Patricia", "Jennifer", "Linda", "Elizabeth", "Barbara", "Susan", "Jessica", "Sarah", "Karen",
+            "Lisa", "Nancy", "Betty", "Margaret", "Sandra", "Ashley", "Kimberly", "Emily", "Donna", "Michelle"
+    );
+
+    private static final List<String> LAST_NAMES = List.of(
+            "Smith", "Johnson", "Williams", "Jones", "Brown", "Davis", "Miller", "Wilson", "Moore", "Taylor",
+            "Anderson", "Thomas", "Jackson", "White", "Harris", "Martin", "Thompson", "Garcia", "Martinez", "Robinson"
+    );
+
     private static final List<String> GENERIC_BIOS = List.of(
-            "Music is my escape 🎧",
+            "Music is my escape",
             "Always looking for new vibes",
-            "Concert addict 🎫",
-            "Bass head 🔊",
+            "Concert addict",
+            "Bass head",
             "Here for the music",
             "Spotify wrapped was embarrassing",
             "Musician / Dreamer",
@@ -170,9 +190,6 @@ public class AuthService {
     }
 
     // HELPER METHODS
-    /**
-     * Orchestrates the creation of demo users.
-     */
     private void createDemoUsers(Long sourceUserId) {
         // 1. Check eligibility
         Boolean hasMusic = transactionTemplate.execute(status -> {
@@ -183,17 +200,16 @@ public class AuthService {
 
         if (Boolean.FALSE.equals(hasMusic)) return;
 
-        // 2. Loop to create bots
-        for (int i = 0; i < 2; i++) {
-            // Execute the creation of ONE bot in its own transaction.
-            Long newBotId = transactionTemplate.execute(status -> {
-                return createSingleBot(sourceUserId);
-            });
+        // 2. Create exactly 1 Male and 1 Female
+        List<Boolean> genders = List.of(true, false);
 
-            // 3. Broadcast AFTER the transaction has definitely committed.
+        for (boolean isMale : genders) {
+            // Execute creation in its own transaction
+            Long newBotId = transactionTemplate.execute(status -> createSingleBot(sourceUserId, isMale));
+
+            // 3. Broadcast
             if (newBotId != null) {
                 try {
-                    // Small delay to ensure DB propagation
                     Thread.sleep(300);
                     socketService.broadcast("newUserProfile", Map.of("newUserId", newBotId));
                 } catch (Exception e) {
@@ -204,71 +220,68 @@ public class AuthService {
     }
 
     /**
-     * Creates a single bot in the database using RandomUser.me api for the profile.
+     * Creates a single bot using local data generation and external image API.
      */
-    private Long createSingleBot(Long sourceUserId) {
+    private Long createSingleBot(Long sourceUserId, boolean isMale) {
         User sourceUser = userRepository.findById(sourceUserId).orElse(null);
         if (sourceUser == null) return null;
 
-        // 1. Fetch Random User Profile from external API
-        Map<String, Object> randomProfile = fetchRandomUserProfile();
-        if (randomProfile == null) return null; // Skip if API fails
-
         User bot = new User();
 
-        // 2. Map Profile Data
-        // RandomUser.me returns: name { first, last }, email, dob { age }, picture { large }
+        // 1. Generate Local Identity based on passed gender
+        String firstName = isMale ?
+                MALE_NAMES.get(random.nextInt(MALE_NAMES.size())) :
+                FEMALE_NAMES.get(random.nextInt(FEMALE_NAMES.size()));
+
+        String lastName = LAST_NAMES.get(random.nextInt(LAST_NAMES.size()));
+        String fullName = firstName + " " + lastName;
+
+        // Generate Age
+        int age = 19 + random.nextInt(32); // 19 to 50
+
+        bot.setName(fullName);
+        bot.setAge(age);
+
+        // Construct unique email
+        String sanitizedName = firstName.toLowerCase() + "." + lastName.toLowerCase();
+        bot.setEmail(System.currentTimeMillis() + "_" + sanitizedName + "@example.com");
+
+        // Bio
+        String randomBio = GENERIC_BIOS.get(random.nextInt(GENERIC_BIOS.size()));
+        bot.setBio(randomBio);
+
+        bot.setPassword(BCrypt.withDefaults().hashToString(12, "bot_pass".toCharArray()));
+        bot.setIsBot(true);
+
+        // 2. Image Handling
         try {
-            @SuppressWarnings("unchecked")
-            Map<String, String> nameMap = (Map<String, String>) randomProfile.get("name");
-            String fullName = nameMap.get("first") + " " + nameMap.get("last");
-            bot.setName(capitalize(fullName));
+            String genderParam = isMale ? "male" : "female";
+            String ageParam = getAgeRangeParam(age);
 
-            // Use email from API, but appending a timestamp to ensure uniqueness in DB
-            String rawEmail = (String) randomProfile.get("email");
-            bot.setEmail(System.currentTimeMillis() + "_" + rawEmail);
+            byte[] croppedImageBytes = fetchAndCropBotImage(genderParam, ageParam, "white");
 
-            @SuppressWarnings("unchecked")
-            Map<String, Object> dobMap = (Map<String, Object>) randomProfile.get("dob");
-            bot.setAge((Integer) dobMap.get("age"));
-
-            // Pick a random bio
-            String randomBio = GENERIC_BIOS.get((int) (Math.random() * GENERIC_BIOS.size()));
-            bot.setBio(randomBio);
-
-            bot.setPassword(BCrypt.withDefaults().hashToString(12, "bot_pass".toCharArray()));
-            bot.setIsBot(true);
-
-            // 3. Image Handling
-            // get a stable URL from RandomUser.me and upload directly to cloudinary.
-            @SuppressWarnings("unchecked")
-            Map<String, String> pictureMap = (Map<String, String>) randomProfile.get("picture");
-            String pictureUrl = pictureMap.get("large");
-
-            try {
+            if (croppedImageBytes != null) {
                 @SuppressWarnings("unchecked")
-                Map<String, Object> uploadResult = cloudinary.uploader().upload(pictureUrl,
+                Map<String, Object> uploadResult = cloudinary.uploader().upload(croppedImageBytes,
                         ObjectUtils.asMap("folder", "bot_profiles"));
                 bot.setImage((String) uploadResult.get("secure_url"));
-            } catch (Exception e) {
-                // Fallback: just use the external URL if upload fails
-                bot.setImage(pictureUrl);
+            } else {
+                // Set default if fetching fails
+                bot.setImage("https://via.placeholder.com/300?text=" + firstName.charAt(0));
             }
-
         } catch (Exception e) {
-            logger.error("Error parsing RandomUser response", e);
-            return null;
+            logger.error("Failed to generate bot image", e);
+            bot.setImage("https://via.placeholder.com/300?text=" + firstName.charAt(0));
         }
 
-        // 4. Share Music Subsets
+        // 3. Share Music Subsets
         bot.getTopArtists().addAll(getRandomSubset(sourceUser.getTopArtists()));
         bot.getTopTracks().addAll(getRandomSubset(sourceUser.getTopTracks()));
         bot.getSavedTracks().addAll(getRandomSubset(sourceUser.getSavedTracks()));
         bot.getFollowedArtists().addAll(getRandomSubset(sourceUser.getFollowedArtists()));
 
-        // 5. Save Bot and Link to User
+        // 4. Save Bot and Link
         User savedBot = userRepository.save(bot);
-
         savedBot.getLikes().add(sourceUser);
         userRepository.save(savedBot);
 
@@ -276,45 +289,71 @@ public class AuthService {
     }
 
     /**
-     * Fetches a single random user profile from https://randomuser.me
+     * Fetches image from this-person-does-not-exist.com, downloads it,
+     * and crops 11% from top and bottom to remove watermarks.
      */
-    private Map<String, Object> fetchRandomUserProfile() {
+    private byte[] fetchAndCropBotImage(String gender, String ageRange, String ethnicity) {
         try {
             RestTemplate restTemplate = new RestTemplate();
-            String url = "https://randomuser.me/api/?nat=us&inc=name,email,dob,picture";
+            long time = System.currentTimeMillis();
 
-            // Add a User-Agent header so Cloudflare thinks we are a real browser
+            // 1. Get the source URL
+            String metaUrl = String.format(
+                    "https://this-person-does-not-exist.com/new?time=%d&gender=%s&age=%s&etnic=%s",
+                    time, gender, ageRange, ethnicity
+            );
+
             HttpHeaders headers = new HttpHeaders();
-            headers.set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
-
+            headers.set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36");
             HttpEntity<String> entity = new HttpEntity<>(headers);
 
-            // Use exchange() to include the headers
             ResponseEntity<Map> response = restTemplate.exchange(
-                    url,
-                    HttpMethod.GET,
-                    entity,
-                    Map.class
+                    metaUrl, HttpMethod.GET, entity, Map.class
             );
 
             Map<String, Object> body = response.getBody();
+            if (body == null || body.get("src") == null) return null;
 
-            if (body != null && body.containsKey("results")) {
-                @SuppressWarnings("unchecked")
-                List<Map<String, Object>> results = (List<Map<String, Object>>) body.get("results");
-                if (!results.isEmpty()) {
-                    return results.get(0);
-                }
-            }
+            String relativeSrc = (String) body.get("src");
+            String fullImageUrl = "https://this-person-does-not-exist.com" + relativeSrc;
+
+            // 2. Download Image for Processing
+            URL url = new URL(fullImageUrl);
+            BufferedImage originalImage = ImageIO.read(url);
+
+            if (originalImage == null) return null;
+
+            // 3. Crop 13% from Top and Bottom
+            int height = originalImage.getHeight();
+            int width = originalImage.getWidth();
+
+            int cropAmount = (int) (height * 0.11); // 11%
+            int newHeight = height - (2 * cropAmount); // Remove top and bottom
+
+            // Ensure we have valid dimensions
+            if (newHeight <= 0) return null;
+
+            BufferedImage croppedImage = originalImage.getSubimage(0, cropAmount, width, newHeight);
+
+            // 4. Convert back to bytes
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            ImageIO.write(croppedImage, "jpg", baos);
+            return baos.toByteArray();
+
         } catch (Exception e) {
-            logger.warn("Failed to fetch from randomuser.me", e);
+            logger.warn("Error fetching/cropping bot image", e);
+            return null;
         }
-        return null;
     }
 
-    /**
-     * Helper to get a random subset of music items.
-     */
+    private String getAgeRangeParam(int age) {
+        if (age <= 18) return "12-18";
+        if (age <= 25) return "19-25";
+        if (age <= 35) return "26-35";
+        if (age <= 50) return "35-50";
+        return "50";
+    }
+
     private <T> List<T> getRandomSubset(Set<T> sourceSet) {
         List<T> list = new ArrayList<>(sourceSet);
         if (list.isEmpty()) return Collections.emptyList();
@@ -332,11 +371,6 @@ public class AuthService {
         }
 
         return list.subList(0, targetCount);
-    }
-
-    private String capitalize(String str) {
-        if (str == null || str.isEmpty()) return str;
-        return Character.toUpperCase(str.charAt(0)) + str.substring(1);
     }
 
     private Integer parseIntSafely(Object obj) {

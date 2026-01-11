@@ -40,12 +40,18 @@ public class MatchService {
         }
 
         if (likedUser.getLikes().contains(currentUser)) {
-            currentUser.getMatches().add(likedUser);
-            likedUser.getMatches().add(currentUser);
-            userRepository.save(currentUser);
-            userRepository.save(likedUser);
 
-            notifyMatch(currentUser, likedUser);
+            boolean alreadyMatched = currentUser.getMatches().stream()
+                    .anyMatch(u -> u.getId().equals(likedUser.getId()));
+
+            if (!alreadyMatched) {
+                currentUser.getMatches().add(likedUser);
+                likedUser.getMatches().add(currentUser);
+                userRepository.save(currentUser);
+                userRepository.save(likedUser);
+
+                notifyMatch(currentUser, likedUser);
+            }
         }
     }
 
