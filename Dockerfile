@@ -9,12 +9,12 @@ COPY . .
 WORKDIR /app/Backend
 
 # Accept the variables from Render
-ARG VITE_AWS_REGION
-ARG VITE_S3_BUCKET
+ARG AWS_REGION
+ARG AWS_S3_BUCKET
 
 # Set them as environment variables for the build process
-ENV VITE_AWS_REGION=$VITE_AWS_REGION
-ENV VITE_S3_BUCKET=$VITE_S3_BUCKET
+ENV VITE_AWS_REGION=$AWS_REGION
+ENV VITE_S3_BUCKET=$AWS_S3_BUCKET
 
 # Run the build (triggers npm install & build via frontend-maven-plugin)
 RUN mvn clean package -DskipTests
