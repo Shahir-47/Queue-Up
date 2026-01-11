@@ -58,14 +58,16 @@ const HomePage = () => {
 		};
 	}, [subscribeToNewUserProfiles, unsubscribeFromNewUserProfiles, authUser]);
 
+	const hasProfiles = userProfiles.length > 0;
+
 	return (
 		<div className="flex flex-col lg:flex-row min-h-screen bg-gradient-to-br from-[#0b0b0b] via-[#121212] to-[#1a1a1a] overflow-hidden">
 			<Sidebar />
 			<div className="flex-grow flex flex-col overflow-hidden">
 				<Header />
 				<main className="flex-grow flex flex-col gap-10 justify-center items-center p-4 relative overflow-hidden">
-					{/* Display all users if available and not in a loading state */}
-					{userProfiles.length > 0 && !isLoadingUserProfiles && (
+					{/* Display all users if available */}
+					{hasProfiles && (
 						<>
 							<SwipeArea />
 
@@ -75,12 +77,12 @@ const HomePage = () => {
 					)}
 
 					{/* Display no users UI if no users available and not in a loading state */}
-					{userProfiles.length === 0 && !isLoadingUserProfiles && (
+					{!hasProfiles && !isLoadingUserProfiles && (
 						<NoMoreProfiles />
 					)}
 
 					{/* Display loading animation if in a loading state */}
-					{isLoadingUserProfiles && <LoadingUI />}
+					{!hasProfiles && isLoadingUserProfiles && <LoadingUI />}
 				</main>
 			</div>
 		</div>

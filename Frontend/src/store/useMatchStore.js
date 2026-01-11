@@ -22,16 +22,40 @@ export const useMatchStore = create((set, get) => ({
 		}
 	},
 
-	getUserProfiles: async () => {
+	getUserProfiles: async (options = {}) => {
+		const { silent = false, merge = false } = options;
+		const hasProfiles = get().userProfiles.length > 0;
+		const showLoading = !silent && !hasProfiles;
+
 		try {
-			set({ isLoadingUserProfiles: true }); // Set isLoadingUserProfiles to true when fetching other users
+			if (showLoading) {
+				set({ isLoadingUserProfiles: true });
+			}
 			const res = await axiosInstance.get("/matches/user-profiles"); //  Sends a GET request to the backend to fetch all other users
-			set({ userProfiles: res.data.users }); // successful, update userProfiles array with the users fetched from the api
+			const nextProfiles = res.data?.users ?? [];
+
+			const latestProfiles = get().userProfiles;
+			if (merge && latestProfiles.length > 0) {
+				const existingIds = new Set(latestProfiles.map((profile) => profile._id));
+				const appendedProfiles = nextProfiles.filter(
+					(profile) => !existingIds.has(profile._id)
+				);
+
+				if (appendedProfiles.length > 0) {
+					set({ userProfiles: [...latestProfiles, ...appendedProfiles] });
+				}
+			} else {
+				set({ userProfiles: nextProfiles }); // successful, update userProfiles array with the users fetched from the api
+			}
 		} catch (error) {
-			set({ userProfiles: [] }); // Reset userProfiles when an error occurs
+			if (!hasProfiles) {
+				set({ userProfiles: [] }); // Reset userProfiles when an error occurs
+			}
 			toast.error(error.response.data.message || "Something went wrong!"); // Show error message
 		} finally {
-			set({ isLoadingUserProfiles: false }); // Set isLoadingUserProfiles to false when the fetching process is complete
+			if (showLoading) {
+				set({ isLoadingUserProfiles: false });
+			}
 		}
 	},
 
@@ -107,8 +131,8 @@ export const useMatchStore = create((set, get) => ({
 
 			//listening for events from backend called newMatch
 			socket.on("newUserProfile", () => {
-				//fetch new user profiles
-				useMatchStore.getState().getUserProfiles();
+				// Fetch new user profiles without interrupting the swipe deck.
+				useMatchStore.getState().getUserProfiles({ silent: true });
 			});
 		} catch (error) {
 			console.log(error);
