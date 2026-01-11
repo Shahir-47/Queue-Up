@@ -3,6 +3,8 @@ import HomePage from "./pages/HomePage";
 import AuthPage from "./pages/AuthPage";
 import ProfilePage from "./pages/ProfilePage";
 import ChatPage from "./pages/ChatPage";
+import HealthPage from "./pages/HealthPage";
+import ErrorPage from "./pages/ErrorPage";
 import { useAuthStore } from "./store/useAuthStore";
 import { useEffect } from "react";
 import { Toaster } from "react-hot-toast";
@@ -51,6 +53,8 @@ function App() {
 					path="/chat/:id"
 					element={authUser ? <ChatPage /> : <Navigate to={"/"} />}
 				/>
+				<Route path="/health" element={<HealthPage />} />
+				<Route path="*" element={<ErrorPage />} />
 			</Routes>
 			<Toaster />
 		</div>
