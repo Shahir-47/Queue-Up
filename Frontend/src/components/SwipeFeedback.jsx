@@ -20,7 +20,7 @@ const SwipeFeedback = () => {
 	return (
 		<div
 			className={`
-		absolute top-10 left-0 right-0 text-center text-2xl font-bold ${getFeedbackStyle(
+		pointer-events-none absolute top-10 left-0 right-0 z-20 text-center text-2xl font-bold ${getFeedbackStyle(
 			swipeFeedback
 		)}
 		`}

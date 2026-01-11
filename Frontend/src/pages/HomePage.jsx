@@ -18,6 +18,7 @@ const HomePage = () => {
 		isLoadingUserProfiles,
 		getUserProfiles,
 		userProfiles,
+		swipeFeedback,
 		subscribeToNewMatches,
 		unsubscribeFromNewMatches,
 		subscribeToNewUserProfiles,
@@ -67,14 +68,10 @@ const HomePage = () => {
 				<Header />
 				<main className="flex-grow flex flex-col gap-10 justify-center items-center p-4 relative overflow-hidden">
 					{/* Display all users if available */}
-					{hasProfiles && (
-						<>
-							<SwipeArea />
+					{hasProfiles && <SwipeArea />}
 
-							{/* This component tells if you liked or disliked the user shown */}
-							<SwipeFeedback />
-						</>
-					)}
+					{/* This component tells if you liked or disliked the user shown */}
+					{swipeFeedback && <SwipeFeedback />}
 
 					{/* Display no users UI if no users available and not in a loading state */}
 					{!hasProfiles && !isLoadingUserProfiles && (
