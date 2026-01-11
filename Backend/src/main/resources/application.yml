@@ -1,5 +1,6 @@
 app:
   client-url: ${APP_CLIENT_URL}
+  bot-creation-enabled: ${APP_BOT_CREATION_ENABLED:true}
 
 spring:
   application:

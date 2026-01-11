@@ -10,6 +10,7 @@ import com.QueueUp.Backend.repository.UserRepository;
 import com.QueueUp.Backend.socket.SocketService;
 import com.cloudinary.Cloudinary;
 import com.cloudinary.utils.ObjectUtils;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
@@ -49,6 +50,9 @@ public class AuthService {
     private final SocketService socketService;
     private final TransactionTemplate transactionTemplate;
     private final Random random = new Random();
+
+    @Value("${app.bot-creation-enabled:true}")
+    private boolean botCreationEnabled;
 
     // LOCAL DATA FOR BOTS
     private static final List<String> MALE_NAMES = List.of(
@@ -159,21 +163,23 @@ public class AuthService {
             }
         }
 
-        // 7. Create Demo Users
-        // We register a hook to run this ONLY after the database transaction successfully commits.
-        Long userId = savedUser.getId();
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-                CompletableFuture.runAsync(() -> {
-                    try {
-                        createDemoUsers(userId);
-                    } catch (Exception e) {
-                        logger.warn("Failed to create demo users", e);
-                    }
-                });
-            }
-        });
+        // 7. Create Demo Users (bots)
+        if (botCreationEnabled) {
+            // We register a hook to run this ONLY after the database transaction successfully commits.
+            Long userId = savedUser.getId();
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    CompletableFuture.runAsync(() -> {
+                        try {
+                            createDemoUsers(userId);
+                        } catch (Exception e) {
+                            logger.warn("Failed to create demo users", e);
+                        }
+                    });
+                }
+            });
+        }
 
         // 8. Return USER
         return savedUser;
@@ -191,6 +197,8 @@ public class AuthService {
 
     // HELPER METHODS
     private void createDemoUsers(Long sourceUserId) {
+        if (!botCreationEnabled) return;
+
         // 1. Check eligibility
         Boolean hasMusic = transactionTemplate.execute(status -> {
             User u = userRepository.findById(sourceUserId).orElse(null);
