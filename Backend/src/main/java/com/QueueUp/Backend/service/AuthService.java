@@ -28,6 +28,11 @@ import java.util.concurrent.CompletableFuture;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
+
 @Service
 public class AuthService {
 
@@ -276,15 +281,27 @@ public class AuthService {
     private Map<String, Object> fetchRandomUserProfile() {
         try {
             RestTemplate restTemplate = new RestTemplate();
-            // Request US nationality for English names, and specific fields
             String url = "https://randomuser.me/api/?nat=us&inc=name,email,dob,picture";
 
-            @SuppressWarnings("unchecked")
-            Map<String, Object> response = restTemplate.getForObject(url, Map.class);
+            // Add a User-Agent header so Cloudflare thinks we are a real browser
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
 
-            if (response != null && response.containsKey("results")) {
+            HttpEntity<String> entity = new HttpEntity<>(headers);
+
+            // Use exchange() to include the headers
+            ResponseEntity<Map> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    entity,
+                    Map.class
+            );
+
+            Map<String, Object> body = response.getBody();
+
+            if (body != null && body.containsKey("results")) {
                 @SuppressWarnings("unchecked")
-                List<Map<String, Object>> results = (List<Map<String, Object>>) response.get("results");
+                List<Map<String, Object>> results = (List<Map<String, Object>>) body.get("results");
                 if (!results.isEmpty()) {
                     return results.get(0);
                 }
