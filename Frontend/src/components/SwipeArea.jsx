@@ -22,8 +22,7 @@ const SwipeArea = () => {
 					preventSwipe={["up", "down"]} // dont allow to swipe up or down
 				>
 					<div
-						className="card bg-[#181818] w-90 sm:w-96 h-[32rem] select-none rounded-lg overflow-hidden border
-					 border-[#2a2a2a]"
+						className="card swipe-card bg-[#181818] w-90 sm:w-96 h-[32rem] select-none rounded-lg overflow-hidden border border-[#2a2a2a]"
 					>
 						{/* IMAGE */}
 						<figure className="px-4 pt-4 h-3/4">
