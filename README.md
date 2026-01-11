@@ -10,7 +10,14 @@
 <h1 align="center">Queue Up</h1>
 
 <p align="center">
-  <a href="https://queue-up.onrender.com">Live Demo</a> •
+  <strong>A music-based social platform that connects people through shared Spotify taste</strong>
+</p>
+
+<p align="center">
+  <a href="https://queue-up.onrender.com"><img src="https://img.shields.io/badge/Live%20Demo-queue--up.onrender.com-1DB954?style=for-the-badge&logo=render" alt="Live Demo"/></a>
+</p>
+
+<p align="center">
   <a href="#features">Features</a> •
   <a href="#architecture">Architecture</a> •
   <a href="#getting-started">Getting Started</a> •
@@ -33,6 +40,8 @@ The entire application is built as a single deployable artifact. The React front
 
 ## Demo Video
 
+Check out the live application at **[queue-up.onrender.com](https://queue-up.onrender.com)**
+
 <!-- Add your demo video here -->
 
 ```
@@ -43,11 +52,21 @@ The entire application is built as a single deployable artifact. The React front
 
 ## Screenshots
 
-<!-- Add your screenshots here -->
+### Login Screen
 
-|     Login Screen      |    Home/Swipe View    |    Chat Interface    |      Profile Page       |
-| :-------------------: | :-------------------: | :------------------: | :---------------------: |
-| ![Login](placeholder) | ![Swipe](placeholder) | ![Chat](placeholder) | ![Profile](placeholder) |
+<img width="820" alt="Login Screen" src="https://github.com/user-attachments/assets/1fd292ca-6a55-4464-8583-33f4181054cd" />
+
+### Home/Swipe View
+
+<img width="958" alt="Home/Swipe View" src="https://github.com/user-attachments/assets/2020ac61-36fa-453a-a506-465d7b38c15a" />
+
+### Chat Interface
+
+<img width="796" alt="Chat Interface" src="https://github.com/user-attachments/assets/e8aae033-6985-4690-83cb-a9f1c25dc343" />
+
+### Profile Page
+
+<img width="534" alt="Profile Page" src="https://github.com/user-attachments/assets/151acde9-d058-4dcd-b07d-038fee0c86c6" />
 
 ---
 
@@ -1033,6 +1052,12 @@ All endpoints except authentication routes require a valid JWT cookie.
 | `/api/uploads/s3/presign-download` | POST   | Get a presigned URL for downloading from S3            |
 | `/api/link-preview`                | POST   | Fetch metadata for a URL to show a link preview        |
 | `/api/health`                      | GET    | Health check endpoint, does not require authentication |
+
+---
+
+## Try It Out
+
+The application is live and available at **[queue-up.onrender.com](https://queue-up.onrender.com)**. You will need a Spotify account to sign up.
 
 ---
 
