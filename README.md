@@ -44,9 +44,9 @@ Check out the live application at **[queue-up.onrender.com](https://queue-up.onr
 
 <!-- Add your demo video here -->
 
-```
-[Demo Video Coming Soon]
-```
+
+https://github.com/user-attachments/assets/ca5e5ba3-b323-47e9-ba25-12381c34ab03
+
 
 ---
 
