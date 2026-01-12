@@ -30,9 +30,9 @@ public class AuthMiddleware implements Filter {
         }
 
         // public paths that do NOT need a token
-        boolean isPublicAuthRoute = path.equals("/api/auth/login") || path.equals("/api/auth/signup") || path.startsWith("/api/auth/spotify/");
+        boolean isPublicAuthRoute = path.equals("/api/auth/login") || path.equals("/api/auth/signup") || path.startsWith("/api/auth/spotify/") || path.equals("/api/ping") || path.equals("/api/health");
 
-        if (isPublicAuthRoute || path.equals("/api/health")) {
+        if (isPublicAuthRoute) {
             chain.doFilter(request, response);
             return;
         }

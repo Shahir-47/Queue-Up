@@ -50,4 +50,9 @@ public class HealthController {
         return ResponseEntity.status(overallUp ? HttpStatus.OK : HttpStatus.SERVICE_UNAVAILABLE)
                 .body(body);
     }
+
+    @GetMapping("/api/ping")
+    public ResponseEntity<String> ping() {
+        return ResponseEntity.ok("pong");
+    }
 }
