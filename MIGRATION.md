@@ -151,7 +151,7 @@ Also grab the **Neon connection string**: Neon console → your project → **Co
 copy the `postgresql://...` URI, the pooled or direct one, either works for a dump. You need it in
 Step 4.
 
-**You'll know it worked:** you have all 20 values and the Neon URI saved somewhere outside this
+**You'll know it worked:** you have all 19 values and the Neon URI saved somewhere outside this
 repo. Do not commit them.
 
 ---
@@ -223,7 +223,7 @@ prints `PostgreSQL 17.11`.
 
 ---
 
-## Step 4: Copy the data over from Neon
+## Step 4: Copy the data over from Neon (done)
 
 **Why:** so your existing users, matches and chat history survive the move. Without this, Hibernate
 would happily build an empty schema on first boot and every account would be gone.
@@ -292,7 +292,7 @@ Compare those three numbers against the same query run on the Neon URI. They sho
 
 ---
 
-## Step 5: Push the WebSocket keepalive
+## Step 5: Push the WebSocket keepalive (done)
 
 **Why:** Cloudflare's free plan closes a proxied connection after **100 seconds of silence**. Queue
 Up's chat socket sends nothing while you are just reading, so on an idle chat Cloudflare would cut
@@ -301,18 +301,13 @@ still basically work, but you would flicker offline to everyone else on every cy
 that arrived inside the gap would not show up until the chat was reopened.
 
 The fix is 24 lines in `Frontend/src/socket/socket.client.js`: send `{"type":"ping"}` every 45
-seconds while the socket is open, and clear the timer on close and on logout. **This is already
-written and sitting uncommitted in your working tree.** The backend needs no change at all: its
+seconds while the socket is open, and clear the timer on close and on logout. **This shipped in
+commit `fbbc1ec`.** The backend needs no change at all: its
 handler only acts on `"typing"` and ignores everything else, which I confirmed by sending the exact
 frame at a running container and watching the connection stay open with nothing logged.
 
-Coolify builds from GitHub and cannot see local files, so push it:
-
-```bash
-git add Frontend/src/socket/socket.client.js MIGRATION.md
-git commit -m "Add WebSocket heartbeat to survive Cloudflare's 100s idle timeout"
-git push
-```
+Coolify builds from GitHub and cannot see local files, so it had to be pushed before Step 6.
+Verified: `origin/main` is at `fbbc1ec` and the pushed copy of the file contains the heartbeat.
 
 **You'll know it worked:** after Step 6 is deployed, open the site, open the browser console, leave
 a chat sitting untouched for three minutes, and confirm you never see `WebSocket Disconnected`.
@@ -476,7 +471,9 @@ Do this before turning Render off, while you still have something to compare aga
 - [ ] Your existing account is still there and you can log in with your old password
 - [ ] **You were not logged out.** If you were, `JWT_SECRET` does not match Step 1
 - [ ] Old matches and old chat history are visible, which is the real proof Step 4 worked
-- [ ] Connect Spotify from a fresh account, all the way through the consent screen
+- [ ] Connect Spotify from a fresh account, all the way through the consent screen. **This is
+      expected to fail unless you hold Spotify Premium**, see the section below. It is not caused
+      by the migration, and it fails the same way on Render
 - [ ] The swipe feed loads and is sorted, so the matching engine is reading music data
 - [ ] Open a chat and send a message, confirm it appears on the other side with no refresh
 - [ ] The green online dot appears and typing indicators work
@@ -491,6 +488,47 @@ Do this before turning Render off, while you still have something to compare aga
 A faster version of the build variable check, without uploading anything: open the site, view
 source on the main JS bundle, and search for `.s3.`. You want to see your real bucket and region
 there, not `undefined`.
+
+---
+
+## About the Spotify Premium block
+
+Spotify changed Development Mode in February 2026. **The app owner must hold an active Spotify
+Premium subscription**, and apps are capped at 5 allowlisted users. New apps were restricted from
+February 11 2026, existing apps migrated March 9 2026. If Premium lapses, the app stops working.
+Extended Quota Mode is exempt but since April 2025 needs a registered organization with 250k
+monthly active users, so it is not an option here.
+
+**This has nothing to do with the migration.** It is an account level block and behaves identically
+on Render and on Nitro.
+
+**No code changes are needed.** Every endpoint this app calls survived: the Authorization Code flow
+with refresh tokens, current user's top artists, top tracks, saved tracks and followed artists. The
+deprecations hit batch metadata, browse, artist top tracks by country and other users' profiles,
+none of which Queue Up uses.
+
+**The blast radius is small**, because the app calls Spotify in exactly one place,
+`AuthService.signup()` at line 160. `getClientForUser` has no other caller, so there is no
+background refresh and no re-sync on login. Everything else reads music data out of Postgres.
+
+- **Existing users are unaffected.** Their data is in the database (verified at restore: 80 top
+  artists, 100 saved tracks, 67 tracks, 44 artists). Swiping, scoring and chat all work with the
+  API fully blocked.
+- **New signups degrade, they do not fail.** The Spotify fetch sits in a try/catch that logs and
+  continues, and the signup form does not gate submit on having connected. A new account is created
+  with no music data and therefore a match score of 0 against everyone.
+
+Three ways forward:
+
+1. **Buy Premium** (about $12/month). Everything works, 5 allowlisted users. You are grandfathered
+   on anything the app already had, so more than 5 existing test users are retained.
+2. **Do nothing.** The demo still works on existing data. The rough edge is a visitor clicking
+   "Connect with Spotify" and getting an error.
+3. **Re-enable bots** by setting `APP_BOT_CREATION_ENABLED=true`. Bot generation clones taste from
+   an existing user's stored data (`AuthService.java:286-289`) and needs no Spotify API at all, so
+   it keeps the feed populated for new signups without Premium.
+
+Add the new redirect URI in Step 7 regardless. Editing app settings still works while blocked.
 
 ---
 
