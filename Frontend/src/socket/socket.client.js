@@ -8,7 +8,28 @@ const SOCKET_URL = `${protocol}//${window.location.host}/ws`;
 let socket = null;
 let userId = null; // Store userId to allow reconnection
 let reconnectTimer = null;
+let heartbeatTimer = null;
 const listeners = {}; // Stores event callbacks: { 'newMatch': [cb1, cb2] }
+
+// Cloudflare closes a proxied connection after 100s of silence, so send a
+// keepalive well inside that window. The server ignores unknown message types.
+const HEARTBEAT_INTERVAL = 45000;
+
+const stopHeartbeat = () => {
+	if (heartbeatTimer) {
+		clearInterval(heartbeatTimer);
+		heartbeatTimer = null;
+	}
+};
+
+const startHeartbeat = () => {
+	stopHeartbeat();
+	heartbeatTimer = setInterval(() => {
+		if (socket && socket.readyState === WebSocket.OPEN) {
+			socket.send(JSON.stringify({ type: "ping" }));
+		}
+	}, HEARTBEAT_INTERVAL);
+};
 
 export const initializeSocket = (id) => {
 	// If ID is provided, update our stored ID. If not, use the stored one (for reconnects)
@@ -34,10 +55,12 @@ export const initializeSocket = (id) => {
 
 	socket.onopen = () => {
 		console.log("WebSocket Connected");
+		startHeartbeat();
 	};
 
 	socket.onclose = () => {
 		console.log("WebSocket Disconnected");
+		stopHeartbeat();
 		// If userId is still set (meaning user didn't logout), try to reconnect
 		if (userId) {
 			console.log("Attempting reconnect in 3s...");
@@ -110,6 +133,7 @@ export const disconnectSocket = () => {
 	// Clear userId to prevent reconnection loop
 	userId = null;
 	if (reconnectTimer) clearTimeout(reconnectTimer);
+	stopHeartbeat();
 
 	if (socket) {
 		socket.close();
